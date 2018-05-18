@@ -6,8 +6,14 @@
 #define SDF_SYNTH_H
 
 
+#include <vector>
 #include <string>
 #include <unordered_map>
+
+
+#define BDD spotBDD
+#include <spot/twa/twa.hh>
+#undef BDD
 
 
 extern "C" {
@@ -23,22 +29,31 @@ extern "C" {
 
 using namespace std;
 
+#define MAX_NOF_SIGNALS 100
+
 
 class Synth {
 
 public:
     /// NOTE: time_limit_sec is used for heuristics (I won't stop on reaching it)
     Synth(bool is_moore_,
-          const string &aiger_file_name_,
+          const vector<string>& inputs_,
+          const vector<string>& outputs_,
+          spot::twa_graph_ptr &aut_,
           const string &output_file_name_,
           bool print_full_model_,
           unsigned time_limit_sec_=3600):
             is_moore(is_moore_),
-            aiger_file_name(aiger_file_name_),
+            inputs(inputs_),
+            outputs(outputs_),
+            aut(aut_),
             output_file_name(output_file_name_),
             print_full_model(print_full_model_),
-            time_limit_sec(time_limit_sec_)
-    {}
+            time_limit_sec(time_limit_sec_) {
+        MASSERT(inputs_.size() + outputs_.size() < MAX_NOF_SIGNALS, "too many inputs/outputs");
+        inputs_outputs.insert(inputs_outputs.end(), inputs.begin(), inputs.end());
+        inputs_outputs.insert(inputs_outputs.end(), outputs.begin(), outputs.end());
+    }
 
     bool run();  // -> returns 'is realizable'
     ~Synth();
@@ -51,7 +66,11 @@ private:
 
 private:
     const bool is_moore;
-    const string aiger_file_name;
+    const vector<string> inputs;
+    const vector<string> outputs;
+    vector<string> inputs_outputs;
+    spot::twa_graph_ptr aut;
+
     const string output_file_name;
     const bool print_full_model;
     const uint time_limit_sec;

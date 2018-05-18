@@ -27,7 +27,7 @@ public:
         if (itr != this->tokens.end() && ++itr != this->tokens.end()) {
             return *itr;
         }
-        static const std::string empty_string("");
+        static const std::string empty_string;
         return empty_string;
     }
 

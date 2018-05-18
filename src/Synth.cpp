@@ -6,6 +6,14 @@
 #include <algorithm>
 #include <spdlog/spdlog.h>
 
+
+#define BDD spotBDD
+#include <spot/twa/twagraph.hh>
+#include <spot/twa/bddprint.hh>
+#include <spot/twa/formula2bdd.hh>
+#undef BDD
+
+
 #include "Synth.hpp"
 
 
@@ -339,7 +347,7 @@ BDD Synth::pre_sys(BDD dst) {
         vector<BDD> uncontrollable = get_uncontrollable_vars_bdds();
         if (!uncontrollable.empty()) {
             BDD uncontrollable_cube = cudd.bddComputeCube(uncontrollable.data(),
-                                                          NULL,
+                                                          nullptr,
                                                           (int)uncontrollable.size());
             result = result.UnivAbstract(uncontrollable_cube);                  update_order_if(cudd, orders);
         }
@@ -347,7 +355,7 @@ BDD Synth::pre_sys(BDD dst) {
         // ∃c ∀u  (...)
         vector<BDD> controllable = get_controllable_vars_bdds();
         BDD controllable_cube = cudd.bddComputeCube(controllable.data(),
-                                                    NULL,
+                                                    nullptr,
                                                     (int)controllable.size());
         result = result.ExistAbstract(controllable_cube);                       update_order_if(cudd, orders);
         return result;
@@ -356,7 +364,7 @@ BDD Synth::pre_sys(BDD dst) {
     // the case of Mealy machines
     vector<BDD> controllable = get_controllable_vars_bdds();
     BDD controllable_cube = cudd.bddComputeCube(controllable.data(),
-                                                NULL,
+                                                nullptr,
                                                 (int)controllable.size());
     BDD result = dst.AndAbstract(~error, controllable_cube);                   update_order_if(cudd, orders);
 
@@ -364,7 +372,7 @@ BDD Synth::pre_sys(BDD dst) {
     if (!uncontrollable.empty()) {
         // ∀u ∃c (...)
         BDD uncontrollable_cube = cudd.bddComputeCube(uncontrollable.data(),
-                                                      NULL,
+                                                      nullptr,
                                                       (int)uncontrollable.size());
         result = result.UnivAbstract(uncontrollable_cube);                    update_order_if(cudd, orders);
     }
@@ -436,7 +444,7 @@ hmap<uint,BDD> Synth::extract_output_funcs() {
 
         BDD c_arena;
         if (controls.size() > 0) {
-            BDD cube = cudd.bddComputeCube(controls.data(), NULL, (int)controls.size());
+            BDD cube = cudd.bddComputeCube(controls.data(), nullptr, (int)controls.size());
             c_arena = non_det_strategy.ExistAbstract(cube);
         }
         else { //no other signals left
@@ -607,91 +615,159 @@ void init_cudd(Cudd& cudd)
 bool Synth::run() {
     init_cudd(cudd);
 
-    aiger_spec = aiger_init();
-    const char *err = aiger_open_and_read_from_file(aiger_spec, aiger_file_name.c_str());
-    MASSERT(err == NULL, err);
-    Cleaner cleaner(aiger_spec);
+    // create T from the spot automaton
 
-    // main part
-    L_INF("synthesize.. number of vars = " << aiger_spec->num_inputs + aiger_spec->num_latches);
+    // We need the dictionary to print the BDDs that label the edges
+    const spot::bdd_dict_ptr& dict = aut->get_dict();
 
-    // Create all variables. _tmp ensures that BDD have positive refs.
+    cout << "Atomic propositions:";
+    for (spot::formula ap: aut->ap())
+        cout << ' ' << ap << " (=" << dict->varnum(ap) << ')';
+
+
+    /* The variables order is as follows:
+     * first come inputs and outputs, ordered accordingly,
+     * then come states, shifted by MAX_NOF_SIGNALS (i.e., s=2 gets BDD index MAX_NOF_SIGNALS + 2)
+     */
     vector<BDD> _tmp;
-    for (uint i = 0; i < aiger_spec->num_inputs + aiger_spec->num_latches; ++i)
+    for (uint i = 0; i < inputs.size() + outputs.size(); ++i)
         _tmp.push_back(cudd.bddVar(i));
+    for (uint s = 0; s < aut->num_states(); ++s)
+        _tmp.push_back(cudd.bddVar(s + MAX_NOF_SIGNALS));
 
-    for (uint i = 0; i < aiger_spec->num_inputs; ++i) {
-        auto aiger_strip_lit = aiger_spec->inputs[i].lit;
-        cudd_by_aiger[aiger_strip_lit] = i;
-        aiger_by_cudd[i] = aiger_strip_lit;
+    unordered_map<uint, vector<spot::twa_graph::edge_storage_t>>
+            inc_edges_by_state;
+    for (uint s = 0; s < aut->num_states(); ++s)
+        for (auto& t: aut->edges())
+            if (t.dst == s)
+                inc_edges_by_state[s].push_back(t);
+
+    // States are numbered from 0 to n-1.
+    for (uint s = 0; s < aut->num_states(); ++s) {
+
+        cout << "State " << s << ":\n";
+
+        // (src,dst,cond,acc)
+        BDD s_transitions = cudd.bddZero();
+        MASSERT(!(inc_edges_by_state[s].empty() && s != 0), "unreachable state: " << s);
+        BDD s_t = cudd.bddOne();
+        for (auto& t: inc_edges_by_state[s]) {
+            cout << "  edge(" << t.src << " -> " << t.dst << ")\n    label = ";
+
+            s_t &= cudd.bddVar(t.src + MAX_NOF_SIGNALS);
+
+            auto f = spot::bdd_to_formula(t.cond, dict);
+            MASSERT(f.is(spot::op::And) || f.is(spot::op::ap) || f.is(spot::op::tt) || f.is(spot::op::Not), f);
+            // current: the above cases are not accounted for: only the first one is accounted for
+            for (auto l: f) {
+                MASSERT(l.is(spot::op::ap) || l.is(spot::op::Not), l);
+
+                string p_name = l.is(spot::op::ap) ? l.ap_name() : l[0].ap_name();
+
+                long idx = distance(inputs_outputs.begin(),
+                                    find(inputs_outputs.begin(), inputs_outputs.end(), p_name));
+                MASSERT(idx < (long)inputs_outputs.size(), "");
+                // TODO: inputs and outputs are currently empty -> we always fail here
+                BDD p_bdd = cudd.bddVar((int)idx);
+                s_t &= l.is(spot::op::ap) ? p_bdd : ~p_bdd;
+            }
+
+            cout << "\n    formula f: " << f << endl;
+            cout << "\n    acc sets = " << t.acc << '\n';
+        }
     }
-    for (uint i = 0; i < aiger_spec->num_latches; ++i) {
-        auto aiger_strip_lit = aiger_spec->latches[i].lit;
-        auto cudd_idx = i + aiger_spec->num_inputs;
-        cudd_by_aiger[aiger_strip_lit] = cudd_idx;
-        aiger_by_cudd[cudd_idx] = aiger_strip_lit;
-    }
+    exit(0);
 
-    compose_init_state_bdd();
-    timer.sec_restart();
-    compose_transition_vector();
-    L_INF("calc_trans_rel took (sec): " << timer.sec_restart());
-    introduce_error_bdd();
-    L_INF("introduce_error_bdd took (sec): " << timer.sec_restart());
 
-    // no need for cache
-    bdd_by_aiger_unlit.clear();
 
-    timer.sec_restart();
-    win_region = calc_win_region();
-    L_INF("calc_win_region took (sec): " << timer.sec_restart());
+    // solve the game
+    // output the result
 
-    if (win_region.IsZero()) {
-        cout << "UNREALIZABLE" << endl;
-        return 0;
-    }
-
-    cout << "REALIZABLE" << endl;
-
-    non_det_strategy = get_nondet_strategy();
-
-    //cleaning non-used bdds
-    win_region = cudd.bddZero();
-    transition_func.clear();
-    init = cudd.bddZero();
-    error = cudd.bddZero();
-    //
-
-    // TODO: set time limit on reordering? or even disable it if no time?
-    hmap<uint, BDD> model_by_cuddidx = extract_output_funcs();                   L_INF("extract_output_funcs took (sec): " << timer.sec_restart());
-
-    //cleaning non-used bdds
-    non_det_strategy = cudd.bddZero();
-    //
-
-    auto elapsed_sec = time_limit_sec - timer.sec_from_origin();
-    if (elapsed_sec > 100) {    // leave 100sec just in case
-        auto spare_time_sec = elapsed_sec - 100;
-        cudd.ResetStartTime();
-        cudd.IncreaseTimeLimit((unsigned long) (spare_time_sec * 1000));
-        cudd.ReduceHeap(CUDD_REORDER_SIFT_CONVERGE);
-        cudd.UnsetTimeLimit();
-        cudd.AutodynDisable();  // just in case -- cudd hangs on timeout
-    }
-
-    for (auto const it : model_by_cuddidx)
-        model_to_aiger(cudd.ReadVars((int)it.first), it.second);
-                                                                   L_INF("model_to_aiger took (sec): " << timer.sec_restart());
-                                                                   L_INF("circuit size: " << (aiger_spec->num_ands + aiger_spec->num_latches));
-
-    int res = 1;
-    if (output_file_name == "stdout")
-        res = aiger_write_to_file(aiger_spec, aiger_ascii_mode, stdout);
-    else if (!output_file_name.empty()) {                                       L_INF("writing a model to " << output_file_name);
-        res = aiger_open_and_write_to_file(aiger_spec, output_file_name.c_str());
-    }
-
-    MASSERT(res, "Could not write result file");
+//    aiger_spec = aiger_init();
+//    const char *err = aiger_open_and_read_from_file(aiger_spec, aiger_file_name.c_str());
+//    MASSERT(err == nullptr, err);
+//    Cleaner cleaner(aiger_spec);
+//
+//    // main part
+//    L_INF("synthesize.. number of vars = " << aiger_spec->num_inputs + aiger_spec->num_latches);
+//
+//    // Create all variables. _tmp ensures that BDD have positive refs.
+//    vector<BDD> _tmp;
+//    for (uint i = 0; i < aiger_spec->num_inputs + aiger_spec->num_latches; ++i)
+//        _tmp.push_back(cudd.bddVar(i));
+//
+//    for (uint i = 0; i < aiger_spec->num_inputs; ++i) {
+//        auto aiger_strip_lit = aiger_spec->inputs[i].lit;
+//        cudd_by_aiger[aiger_strip_lit] = i;
+//        aiger_by_cudd[i] = aiger_strip_lit;
+//    }
+//    for (uint i = 0; i < aiger_spec->num_latches; ++i) {
+//        auto aiger_strip_lit = aiger_spec->latches[i].lit;
+//        auto cudd_idx = i + aiger_spec->num_inputs;
+//        cudd_by_aiger[aiger_strip_lit] = cudd_idx;
+//        aiger_by_cudd[cudd_idx] = aiger_strip_lit;
+//    }
+//
+//    compose_init_state_bdd();
+//    timer.sec_restart();
+//    compose_transition_vector();
+//    L_INF("calc_trans_rel took (sec): " << timer.sec_restart());
+//    introduce_error_bdd();
+//    L_INF("introduce_error_bdd took (sec): " << timer.sec_restart());
+//
+//    // no need for cache
+//    bdd_by_aiger_unlit.clear();
+//
+//    timer.sec_restart();
+//    win_region = calc_win_region();
+//    L_INF("calc_win_region took (sec): " << timer.sec_restart());
+//
+//    if (win_region.IsZero()) {
+//        cout << "UNREALIZABLE" << endl;
+//        return 0;
+//    }
+//
+//    cout << "REALIZABLE" << endl;
+//
+//    non_det_strategy = get_nondet_strategy();
+//
+//    //cleaning non-used bdds
+//    win_region = cudd.bddZero();
+//    transition_func.clear();
+//    init = cudd.bddZero();
+//    error = cudd.bddZero();
+//    //
+//
+//    // TODO: set time limit on reordering? or even disable it if no time?
+//    hmap<uint, BDD> model_by_cuddidx = extract_output_funcs();                   L_INF("extract_output_funcs took (sec): " << timer.sec_restart());
+//
+//    //cleaning non-used bdds
+//    non_det_strategy = cudd.bddZero();
+//    //
+//
+//    auto elapsed_sec = time_limit_sec - timer.sec_from_origin();
+//    if (elapsed_sec > 100) {    // leave 100sec just in case
+//        auto spare_time_sec = elapsed_sec - 100;
+//        cudd.ResetStartTime();
+//        cudd.IncreaseTimeLimit((unsigned long) (spare_time_sec * 1000));
+//        cudd.ReduceHeap(CUDD_REORDER_SIFT_CONVERGE);
+//        cudd.UnsetTimeLimit();
+//        cudd.AutodynDisable();  // just in case -- cudd hangs on timeout
+//    }
+//
+//    for (auto const it : model_by_cuddidx)
+//        model_to_aiger(cudd.ReadVars((int)it.first), it.second);
+//                                                                   L_INF("model_to_aiger took (sec): " << timer.sec_restart());
+//                                                                   L_INF("circuit size: " << (aiger_spec->num_ands + aiger_spec->num_latches));
+//
+//    int res = 1;
+//    if (output_file_name == "stdout")
+//        res = aiger_write_to_file(aiger_spec, aiger_ascii_mode, stdout);
+//    else if (!output_file_name.empty()) {                                       L_INF("writing a model to " << output_file_name);
+//        res = aiger_open_and_write_to_file(aiger_spec, output_file_name.c_str());
+//    }
+//
+//    MASSERT(res, "Could not write result file");
 
     return 1;
 }
