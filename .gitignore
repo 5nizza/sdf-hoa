@@ -1,3 +1,6 @@
+binary
+cmake-build-debug
+build
 my-build
 # Compiled Object files
 *.slo
@@ -35,3 +38,5 @@ func_tests/last.log
 */.idea
 .idea
 setup.sh
+
+tags
