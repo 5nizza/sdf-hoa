@@ -1,0 +1,22 @@
+aag 10 2 3 1 5
+2
+4
+6 2
+8 6
+10 8
+20
+12 6 5
+14 8 5
+16 14 12
+18 10 5
+20 16 18
+i0 i_r
+i1 controllable_g
+l0 r11
+l1 r12
+l2 r13
+o0 err
+c
+example4: r -> (Xg || XXg || XXXg)
+
+realizable

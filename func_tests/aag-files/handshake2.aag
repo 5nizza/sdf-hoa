@@ -1,0 +1,24 @@
+aag 13 4 2 1 7
+2
+4
+6
+8
+10 2
+12 4
+27
+14 7 10
+16 6 11
+18 15 17
+20 9 12
+22 8 13
+24 21 23
+26 18 24
+i0 i_r1
+i1 i_r2
+i2 controllable_g1
+i3 controllable_g2
+l0 l_r1
+l1 l_r2
+c
+G((r1 <-> X(g1)) & (r2 <-> X(g2)))
+realizable
