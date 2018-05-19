@@ -18,13 +18,13 @@
 using namespace std;
 
 
-vector<string> tokenize_line(const string& line);
+vector<string> tokenize_line(uint nof_tokens_to_skip, const string& line);
 
 
 void print_usage_exit() {
     cout << endl
          << "<tool>  <hoa_file> -s <inputs_outputs_file> [-f] [-v] [-moore] [-o] [-h]" << endl << endl
-         << "-s      file with space-separated signals into inputs/outputs (first line: inputs, second line: outputs)" << endl
+         << "-s      part file with two lines (example: first line: `.inputs i1 i2`, second line: `.outputs o1 o2`)" << endl
          << "-f      you want a full model" << endl
          << "        (with outputs defined along with the `bad` output)" << endl
          << "-moore  synthesize Moore machines (by default I synthesize Mealy)" << endl
@@ -66,8 +66,12 @@ int main(int argc, char *argv[]) {
         cout << "bad file with inputs/outputs" << endl;
         exit(1);
     }
-    vector<string> inputs = tokenize_line(line_inputs);
-    vector<string> outputs = tokenize_line(line_outputs);
+    vector<string> inputs = tokenize_line(1, line_inputs);
+    vector<string> outputs = tokenize_line(1, line_outputs);
+    for (auto s: inputs)
+        cout << s << endl;
+    for (auto s: outputs)
+        cout << s << endl;
 
     spot::parsed_aut_ptr pa = parse_aut(hoa_file_name, spot::make_bdd_dict());
     MASSERT(pa->format_errors(cerr) == 0, "error while reading HOA file");
@@ -78,11 +82,16 @@ int main(int argc, char *argv[]) {
     return is_realizable? 10:20;
 }
 
-vector<string> tokenize_line(const string& line) {
+
+vector<string> tokenize_line(uint nof_tokens_to_skip, const string& line) {
     istringstream iss(line);
     string token;
     vector<string> tokens;
-    while (iss >> token)
+    uint skipped = 0;
+    while (iss >> token) {
+        if (nof_tokens_to_skip > 0 && skipped++ < nof_tokens_to_skip)
+            continue;
         tokens.push_back(token);
+    }
     return tokens;
 }
