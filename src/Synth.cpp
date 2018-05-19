@@ -93,27 +93,106 @@ vector<BDD> Synth::get_uncontrollable_vars_bdds() {
 
 
 void Synth::introduce_error_bdd() {
-    error = get_bdd_for_sign_lit(aiger_spec->outputs[0].lit);
+    // Pick all the accepting states.
+    // Assumptions:
+    // - acceptance is state-based,
+    // - state is accepting => state has a self-loop with true.
+    L_INF("introduce_error_bdd..");
+
+    MASSERT(aut->is_sba() == spot::trival::yes_value, "");
+    MASSERT(aut->prop_terminal() == spot::trival::yes_value, "");
+
+    error = cudd.bddOne();
+    for (auto s = 0u; s < aut->num_states(); ++s)
+        if (aut->state_is_accepting(s))
+            error &= cudd.bddVar(s + MAX_NOF_SIGNALS);
 }
 
 
-void Synth::compose_init_state_bdd() { // Initial state is 'all latches are zero'
+void Synth::compose_init_state_bdd() { // Initial state is 'the latch of the initial state is 1, others are 0'
     L_INF("compose_init_state_bdd..");
 
-    init = cudd.bddOne();
+    init = cudd.bddVar(MAX_NOF_SIGNALS); // the initial state is true'
+    for (auto s = 1u; s < aut->num_states(); s++) // skip the initial state
+        init = init & ~cudd.bddVar(s + MAX_NOF_SIGNALS);
+}
 
-    for (uint i = 0; i < aiger_spec->num_latches; i++) {
-        BDD latch_var = get_bdd_for_sign_lit(aiger_spec->latches[i].lit);
-        init = init & ~latch_var;
+
+BDD bdd_from_p_name(const string& p_name,
+                    const vector<string>& inputs_outputs,
+                    Cudd& cudd) {
+    long idx = distance(inputs_outputs.begin(),
+                        find(inputs_outputs.begin(), inputs_outputs.end(), p_name));
+    MASSERT(idx < (long) inputs_outputs.size(), "idx is out of range");
+    BDD p_bdd = cudd.bddVar((int) idx);
+    return p_bdd;
+}
+
+
+BDD translate_formula_into_cuddBDD(const spot::formula &formula,
+                                   vector<string> &inputs_outputs,
+                                   Cudd &cudd) {
+    // formula is the sum of products (i.e., in DNF)
+    if (formula.is(spot::op::Or)) {
+        BDD cudd_bdd = cudd.bddZero();
+        for (auto l: formula)
+            cudd_bdd |= translate_formula_into_cuddBDD(l, inputs_outputs, cudd);
+        return cudd_bdd;
     }
+
+    if (formula.is(spot::op::And)) {
+        BDD cudd_bdd = cudd.bddOne();
+        for (auto l: formula)
+            cudd_bdd &= translate_formula_into_cuddBDD(l, inputs_outputs, cudd);
+        return cudd_bdd;
+    }
+
+    if (formula.is(spot::op::ap))
+        return bdd_from_p_name(formula.ap_name(), inputs_outputs, cudd);
+
+    if (formula.is(spot::op::Not)) {
+        MASSERT(formula[0].is(spot::op::ap), formula);
+        return ~bdd_from_p_name(formula[0].ap_name(), inputs_outputs, cudd);
+    }
+
+    if (formula.is(spot::op::tt))
+        return cudd.bddOne();  // no restriction
+
+    MASSERT(0, "unexpected type of f: " << formula);
 }
 
 
 void Synth::compose_transition_vector() {
     L_INF("compose_transition_vector..");
 
-    for (uint i = 0; i < aiger_spec->num_latches; ++i)
-        transition_func[aiger_spec->latches[i].lit] = get_bdd_for_sign_lit(aiger_spec->latches[i].next);
+    const spot::bdd_dict_ptr& spot_bdd_dict = aut->get_dict();
+
+    L_INF("Atomic propositions explicitly used by the automaton:");
+    for (const spot::formula& ap: aut->ap())
+        L_INF(' ' << ap << " (=" << spot_bdd_dict->varnum(ap) << ')');
+
+    unordered_map<uint, vector<spot::twa_graph::edge_storage_t>> in_edges_by_state;
+    for (uint s = 0; s < aut->num_states(); ++s)
+        for (auto &t: aut->edges())
+            if (t.dst == s)
+                in_edges_by_state[s].push_back(t);
+
+    // States are numbered from 0 to n-1.
+    for (uint s = 0; s < aut->num_states(); ++s) {
+        L_INF("Processing state " << s << ":");
+
+        BDD s_transitions = cudd.bddZero();
+        for (auto &t: in_edges_by_state[s]) {
+            // t has src, dst, cond, acc
+            L_INF("  edge: " << t.src << " -> " << t.dst << ": " << spot::bdd_to_formula(t.cond, spot_bdd_dict) << ": " << t.acc);
+
+            BDD s_t = cudd.bddVar(t.src + MAX_NOF_SIGNALS);
+            s_t &= translate_formula_into_cuddBDD(spot::bdd_to_formula(t.cond, spot_bdd_dict), inputs_outputs, cudd);
+            s_transitions |= s_t;
+        }
+        transition_func[s] = s_transitions;
+//        cudd.DumpDot((vector<BDD>){s_transitions});
+    }
 }
 
 
@@ -604,8 +683,7 @@ public:
 };
 
 
-void init_cudd(Cudd& cudd)
-{
+void init_cudd(Cudd& cudd) {
 //    cudd.Srandom(827464282);  // for reproducibility (?)
     cudd.AutodynEnable(CUDD_REORDER_SIFT);
 //    cudd.EnableReorderingReporting();
@@ -617,68 +695,23 @@ bool Synth::run() {
 
     // create T from the spot automaton
 
-    // We need the dictionary to print the BDDs that label the edges
-    const spot::bdd_dict_ptr& dict = aut->get_dict();
-
-    cout << "Atomic propositions:";
-    for (spot::formula ap: aut->ap())
-        cout << ' ' << ap << " (=" << dict->varnum(ap) << ')';
-
-
     /* The variables order is as follows:
      * first come inputs and outputs, ordered accordingly,
-     * then come states, shifted by MAX_NOF_SIGNALS (i.e., s=2 gets BDD index MAX_NOF_SIGNALS + 2)
-     */
-    vector<BDD> _tmp;
+     * then come states, shifted by MAX_NOF_SIGNALS (i.e., s=2 gets BDD index MAX_NOF_SIGNALS + 2) */
+    vector<BDD> _tmp; // _tmp ensures that all var BDDs have positive refs (TODO: do we really need this?)
     for (uint i = 0; i < inputs.size() + outputs.size(); ++i)
         _tmp.push_back(cudd.bddVar(i));
     for (uint s = 0; s < aut->num_states(); ++s)
         _tmp.push_back(cudd.bddVar(s + MAX_NOF_SIGNALS));
 
-    unordered_map<uint, vector<spot::twa_graph::edge_storage_t>>
-            inc_edges_by_state;
-    for (uint s = 0; s < aut->num_states(); ++s)
-        for (auto& t: aut->edges())
-            if (t.dst == s)
-                inc_edges_by_state[s].push_back(t);
+    timer.sec_restart();
+    compose_init_state_bdd();
+    compose_transition_vector();
+    introduce_error_bdd();
+    L_INF("creating transition relation took (sec): " << timer.sec_restart());
 
-    // States are numbered from 0 to n-1.
-    for (uint s = 0; s < aut->num_states(); ++s) {
-
-        cout << "State " << s << ":\n";
-
-        // (src,dst,cond,acc)
-        BDD s_transitions = cudd.bddZero();
-        MASSERT(!(inc_edges_by_state[s].empty() && s != 0), "unreachable state: " << s);
-        BDD s_t = cudd.bddOne();
-        for (auto& t: inc_edges_by_state[s]) {
-            cout << "  edge(" << t.src << " -> " << t.dst << ")\n    label = ";
-
-            s_t &= cudd.bddVar(t.src + MAX_NOF_SIGNALS);
-
-            auto f = spot::bdd_to_formula(t.cond, dict);
-            MASSERT(f.is(spot::op::And) || f.is(spot::op::ap) || f.is(spot::op::tt) || f.is(spot::op::Not), f);
-            // current: the above cases are not accounted for: only the first one is accounted for
-            for (auto l: f) {
-                MASSERT(l.is(spot::op::ap) || l.is(spot::op::Not), l);
-
-                string p_name = l.is(spot::op::ap) ? l.ap_name() : l[0].ap_name();
-
-                long idx = distance(inputs_outputs.begin(),
-                                    find(inputs_outputs.begin(), inputs_outputs.end(), p_name));
-                MASSERT(idx < (long)inputs_outputs.size(), "");
-                // TODO: inputs and outputs are currently empty -> we always fail here
-                BDD p_bdd = cudd.bddVar((int)idx);
-                s_t &= l.is(spot::op::ap) ? p_bdd : ~p_bdd;
-            }
-
-            cout << "\n    formula f: " << f << endl;
-            cout << "\n    acc sets = " << t.acc << '\n';
-        }
-    }
-    exit(0);
-
-
+//    win_region = calc_win_region();
+//    L_INF("calc_win_region took (sec): " << timer.sec_restart());
 
     // solve the game
     // output the result

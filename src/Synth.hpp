@@ -81,7 +81,7 @@ private:
     Cudd cudd;
     aiger *aiger_spec;
 
-    unordered_map<unsigned, BDD> transition_func;  // _aiger_unsigned_lit_ to bdd
+    unordered_map<unsigned, BDD> transition_func;       // automaton state (without the shift) to BDD
     BDD init;
     BDD error;
     BDD win_region;

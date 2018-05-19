@@ -57,10 +57,10 @@ int main(int argc, char *argv[]) {
 
     spot::parsed_aut_ptr pa = parse_aut(hoa_file_name, spot::make_bdd_dict());
     MASSERT(pa->format_errors(std::cerr) == 0, "error while reading HOA file");
-    MASSERT (pa->aborted==0, "could not read HOA file: it is terminated with ABORT");
+    MASSERT (pa->aborted==0, "could not read HOA file: it is terminated with 'ABORT'");
 
-    vector<string> inputs;   // TODO
-    vector<string> outputs;  // TODO
+    vector<string> inputs = {"r1", "r2"};   // TODO
+    vector<string> outputs = {"g1", "g2"};       // TODO
 
     Synth synthesizer(is_moore, inputs, outputs, pa->aut, output_file_name, to_print_full_model, 3600);
     bool is_realizable = synthesizer.run();
