@@ -93,7 +93,7 @@ vector<BDD> Synth::get_uncontrollable_vars_bdds() {
 
 
 void Synth::introduce_error_bdd() {
-    // Pick all the accepting states.
+    // Error BDD is true on reaching any of the accepting states.
     // Assumptions:
     // - acceptance is state-based,
     // - state is accepting => state has a self-loop with true.
@@ -102,17 +102,17 @@ void Synth::introduce_error_bdd() {
     MASSERT(aut->is_sba() == spot::trival::yes_value, "");
     MASSERT(aut->prop_terminal() == spot::trival::yes_value, "");
 
-    error = cudd.bddOne();
+    error = cudd.bddZero();
     for (auto s = 0u; s < aut->num_states(); ++s)
         if (aut->state_is_accepting(s))
-            error &= cudd.bddVar(s + MAX_NOF_SIGNALS);
+            error |= cudd.bddVar(s + MAX_NOF_SIGNALS);
 }
 
 
 void Synth::compose_init_state_bdd() { // Initial state is 'the latch of the initial state is 1, others are 0'
     L_INF("compose_init_state_bdd..");
 
-    init = cudd.bddVar(MAX_NOF_SIGNALS); // the initial state is true'
+    init = cudd.bddVar(MAX_NOF_SIGNALS); // the initial state is 'true'
     for (auto s = 1u; s < aut->num_states(); s++) // skip the initial state
         init = init & ~cudd.bddVar(s + MAX_NOF_SIGNALS);
 }
@@ -186,8 +186,8 @@ void Synth::compose_transition_vector() {
             // t has src, dst, cond, acc
             L_INF("  edge: " << t.src << " -> " << t.dst << ": " << spot::bdd_to_formula(t.cond, spot_bdd_dict) << ": " << t.acc);
 
-            BDD s_t = cudd.bddVar(t.src + MAX_NOF_SIGNALS);
-            s_t &= translate_formula_into_cuddBDD(spot::bdd_to_formula(t.cond, spot_bdd_dict), inputs_outputs, cudd);
+            BDD s_t = cudd.bddVar(t.src + MAX_NOF_SIGNALS)
+                      & translate_formula_into_cuddBDD(spot::bdd_to_formula(t.cond, spot_bdd_dict), inputs_outputs, cudd);
             s_transitions |= s_t;
         }
         transition_func[s] = s_transitions;
