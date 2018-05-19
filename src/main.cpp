@@ -68,10 +68,6 @@ int main(int argc, char *argv[]) {
     }
     vector<string> inputs = tokenize_line(1, line_inputs);
     vector<string> outputs = tokenize_line(1, line_outputs);
-    for (auto s: inputs)
-        cout << s << endl;
-    for (auto s: outputs)
-        cout << s << endl;
 
     spot::parsed_aut_ptr pa = parse_aut(hoa_file_name, spot::make_bdd_dict());
     MASSERT(pa->format_errors(cerr) == 0, "error while reading HOA file");
