@@ -63,32 +63,23 @@ BDD Synth::get_bdd_for_sign_lit(uint lit) {
 }
 
 
-vector<BDD> Synth::get_bdd_vars(bool(*filter_func)(char *)) {
+vector<BDD> Synth::get_controllable_vars_bdds() {
     vector<BDD> result;
-    for (uint i = 0; i < aiger_spec->num_inputs; ++i) {
-        aiger_symbol symbol = aiger_spec->inputs[i];
-        if ((*filter_func)(symbol.name)) {
-            BDD out_var_bdd = get_bdd_for_sign_lit(symbol.lit);
-            result.push_back(out_var_bdd);
-        }
+    for (ulong i = inputs.size(); i < inputs_outputs.size(); ++i) {
+        BDD var_bdd = cudd.bddVar(static_cast<int>(i));
+        result.push_back(var_bdd);
     }
-
     return result;
 }
 
 
-bool starts_with_controllable(char *name) { return 0 == string(name).find("controllable"); }
-
-bool not_starts_with_controllable(char *name) { return string::npos == string(name).find("controllable"); }
-
-
-vector<BDD> Synth::get_controllable_vars_bdds() {
-    return get_bdd_vars(starts_with_controllable);
-}
-
-
 vector<BDD> Synth::get_uncontrollable_vars_bdds() {
-    return get_bdd_vars(not_starts_with_controllable);
+    vector<BDD> result;
+    for (uint i = 0; i < inputs.size(); ++i) {
+        BDD var_bdd = cudd.bddVar(i);
+        result.push_back(var_bdd);
+    }
+    return result;
 }
 
 
@@ -105,16 +96,16 @@ void Synth::introduce_error_bdd() {
     error = cudd.bddZero();
     for (auto s = 0u; s < aut->num_states(); ++s)
         if (aut->state_is_accepting(s))
-            error |= cudd.bddVar(s + MAX_NOF_SIGNALS);
+            error |= cudd.bddVar(s + NOF_SIGNALS);
 }
 
 
 void Synth::compose_init_state_bdd() { // Initial state is 'the latch of the initial state is 1, others are 0'
     L_INF("compose_init_state_bdd..");
 
-    init = cudd.bddVar(MAX_NOF_SIGNALS); // the initial state is 'true'
+    init = cudd.bddVar(NOF_SIGNALS); // the initial state is 'true'
     for (auto s = 1u; s < aut->num_states(); s++) // skip the initial state
-        init = init & ~cudd.bddVar(s + MAX_NOF_SIGNALS);
+        init = init & ~cudd.bddVar(s + NOF_SIGNALS);
 }
 
 
@@ -123,7 +114,7 @@ BDD bdd_from_p_name(const string& p_name,
                     Cudd& cudd) {
     long idx = distance(inputs_outputs.begin(),
                         find(inputs_outputs.begin(), inputs_outputs.end(), p_name));
-    MASSERT(idx < (long) inputs_outputs.size(), "idx is out of range");
+    MASSERT(idx < (long) inputs_outputs.size(), "idx is out of range for p_name: " << p_name);
     BDD p_bdd = cudd.bddVar((int) idx);
     return p_bdd;
 }
@@ -186,7 +177,7 @@ void Synth::compose_transition_vector() {
             // t has src, dst, cond, acc
             L_INF("  edge: " << t.src << " -> " << t.dst << ": " << spot::bdd_to_formula(t.cond, spot_bdd_dict) << ": " << t.acc);
 
-            BDD s_t = cudd.bddVar(t.src + MAX_NOF_SIGNALS)
+            BDD s_t = cudd.bddVar(t.src + NOF_SIGNALS)
                       & translate_formula_into_cuddBDD(spot::bdd_to_formula(t.cond, spot_bdd_dict), inputs_outputs, cudd);
             s_transitions |= s_t;
         }
@@ -200,8 +191,8 @@ vector<BDD> Synth::get_substitution() {
     vector<BDD> substitution;
 
     for (uint i = 0; i < (uint)cudd.ReadSize(); ++i) {
-        if (aiger_is_latch(aiger_spec, aiger_by_cudd[i]))
-            substitution.push_back(transition_func.find(aiger_by_cudd[i])->second);
+        if (i >= inputs_outputs.size()) // is state variable
+            substitution.push_back(transition_func.find(i - (uint)inputs_outputs.size())->second);
         else
             substitution.push_back(cudd.ReadVars(i));
     }
@@ -465,7 +456,7 @@ BDD Synth::calc_win_region() {
     **/
 
     BDD new_ = cudd.bddOne();
-    for (uint i = 1; ; ++i) {                                             L_INF("calc_win_region: iteration " << i << ": node count " << cudd.ReadNodeCount());
+    for (uint i = 1; ; ++i) {                                                  L_INF("calc_win_region: iteration " << i << ": node count " << cudd.ReadNodeCount());
         BDD curr = new_;
 
         new_ = pre_sys(curr);
@@ -697,12 +688,12 @@ bool Synth::run() {
 
     /* The variables order is as follows:
      * first come inputs and outputs, ordered accordingly,
-     * then come states, shifted by MAX_NOF_SIGNALS (i.e., s=2 gets BDD index MAX_NOF_SIGNALS + 2) */
+     * then come states, shifted by NOF_SIGNALS (i.e., s=2 gets BDD index NOF_SIGNALS + 2) */
     vector<BDD> _tmp; // _tmp ensures that all var BDDs have positive refs (TODO: do we really need this?)
     for (uint i = 0; i < inputs.size() + outputs.size(); ++i)
         _tmp.push_back(cudd.bddVar(i));
     for (uint s = 0; s < aut->num_states(); ++s)
-        _tmp.push_back(cudd.bddVar(s + MAX_NOF_SIGNALS));
+        _tmp.push_back(cudd.bddVar(s + NOF_SIGNALS));
 
     timer.sec_restart();
     compose_init_state_bdd();
@@ -710,8 +701,16 @@ bool Synth::run() {
     introduce_error_bdd();
     L_INF("creating transition relation took (sec): " << timer.sec_restart());
 
-//    win_region = calc_win_region();
-//    L_INF("calc_win_region took (sec): " << timer.sec_restart());
+    win_region = calc_win_region();
+    L_INF("calc_win_region took (sec): " << timer.sec_restart());
+
+    if (win_region.IsZero()) {
+        cout << "UNREALIZABLE" << endl;
+        return false;
+    }
+
+    cout << "REALIZABLE" << endl;
+    return true;
 
     // solve the game
     // output the result
@@ -801,8 +800,6 @@ bool Synth::run() {
 //    }
 //
 //    MASSERT(res, "Could not write result file");
-
-    return 1;
 }
 
 Synth::~Synth() {

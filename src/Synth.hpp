@@ -29,8 +29,6 @@ extern "C" {
 
 using namespace std;
 
-#define MAX_NOF_SIGNALS 100
-
 
 class Synth {
 
@@ -50,9 +48,9 @@ public:
             output_file_name(output_file_name_),
             print_full_model(print_full_model_),
             time_limit_sec(time_limit_sec_) {
-        MASSERT(inputs_.size() + outputs_.size() < MAX_NOF_SIGNALS, "too many inputs/outputs");
         inputs_outputs.insert(inputs_outputs.end(), inputs.begin(), inputs.end());
         inputs_outputs.insert(inputs_outputs.end(), outputs.begin(), outputs.end());
+        NOF_SIGNALS = (uint)inputs_outputs.size();
     }
 
     bool run();  // -> returns 'is realizable'
@@ -69,6 +67,7 @@ private:
     const vector<string> inputs;
     const vector<string> outputs;
     vector<string> inputs_outputs;
+    uint NOF_SIGNALS;
     spot::twa_graph_ptr aut;
 
     const string output_file_name;
