@@ -60,10 +60,6 @@ int main(int argc, char *argv[]) {
             << "full_model: " << to_print_full_model << ", "
             << "output_file: " << output_file_name;
 
-    spot::parsed_aut_ptr pa = parse_aut(hoa_file_name, spot::make_bdd_dict());
-    MASSERT(pa->format_errors(cerr) == 0, "error while reading HOA file");
-    MASSERT (pa->aborted==0, "could not read HOA file: it is terminated with 'ABORT'");
-
     std::ifstream signals_file(signals_file_name);
     string line_inputs, line_outputs;
     if (!getline(signals_file, line_inputs) || !getline(signals_file, line_outputs) ) {
@@ -72,6 +68,10 @@ int main(int argc, char *argv[]) {
     }
     vector<string> inputs = tokenize_line(line_inputs);
     vector<string> outputs = tokenize_line(line_outputs);
+
+    spot::parsed_aut_ptr pa = parse_aut(hoa_file_name, spot::make_bdd_dict());
+    MASSERT(pa->format_errors(cerr) == 0, "error while reading HOA file");
+    MASSERT (pa->aborted==0, "could not read HOA file: it is terminated with 'ABORT'");
 
     Synth synthesizer(is_moore, inputs, outputs, pa->aut, output_file_name, to_print_full_model, 3600);
     bool is_realizable = synthesizer.run();

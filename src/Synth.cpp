@@ -100,12 +100,16 @@ void Synth::introduce_error_bdd() {
 }
 
 
-void Synth::compose_init_state_bdd() { // Initial state is 'the latch of the initial state is 1, others are 0'
+void Synth::compose_init_state_bdd() {
     L_INF("compose_init_state_bdd..");
 
-    init = cudd.bddVar(NOF_SIGNALS); // the initial state is 'true'
-    for (auto s = 1u; s < aut->num_states(); s++) // skip the initial state
-        init = init & ~cudd.bddVar(s + NOF_SIGNALS);
+    // Initial state is 'the latch of the initial state is 1, others are 0'
+    init = cudd.bddOne();
+    for (auto s = 0u; s < aut->num_states(); s++)
+        if (s != aut->get_init_state_number())
+            init &= ~cudd.bddVar(s + NOF_SIGNALS);
+        else
+            init &= cudd.bddVar(s + NOF_SIGNALS);
 }
 
 
