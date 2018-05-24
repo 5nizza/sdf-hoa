@@ -30,7 +30,7 @@ target_link_libraries(${PROJECT}-opt ${CUDD_LIBRARIES})
 target_link_libraries(${PROJECT}-opt bddx spot)
 set_target_properties(${PROJECT}-opt PROPERTIES COMPILE_FLAGS "${COMPILE_FLAGS} -fPIC -DNDEBUG -O3")
 
-add_executable(${PROJECT}-debug ${project_SRC} main)
+add_executable(${PROJECT}-debug ${project_SRC} main k_reduce.cpp)
 target_link_libraries(${PROJECT}-debug ${AIGER_LIBRARIES})
 target_link_libraries(${PROJECT}-debug ${CUDD_LIBRARIES})
 target_link_libraries(${PROJECT}-debug bddx spot)

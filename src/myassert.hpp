@@ -9,7 +9,7 @@
 {                                                                            \
   if(!(condition))                                                           \
   {                                                                          \
-    std::cerr << __FILE__ << " (" << __LINE__ << ") : " << message << endl;  \
+    std::cerr << __FILE__ << " (" << __LINE__ << ") : " << message << std::endl;  \
     abort();                                                                 \
   }                                                                          \
 }
