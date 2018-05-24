@@ -39,14 +39,12 @@ public:
           const vector<string>& outputs_,
           spot::twa_graph_ptr &aut_,
           const string &output_file_name_,
-          bool print_full_model_,
           unsigned time_limit_sec_=3600):
             is_moore(is_moore_),
             inputs(inputs_),
             outputs(outputs_),
             aut(aut_),
             output_file_name(output_file_name_),
-            print_full_model(print_full_model_),
             time_limit_sec(time_limit_sec_) {
         inputs_outputs.insert(inputs_outputs.end(), inputs.begin(), inputs.end());
         inputs_outputs.insert(inputs_outputs.end(), outputs.begin(), outputs.end());
@@ -71,7 +69,6 @@ private:
     spot::twa_graph_ptr aut;
 
     const string output_file_name;
-    const bool print_full_model;
     const uint time_limit_sec;
 
 

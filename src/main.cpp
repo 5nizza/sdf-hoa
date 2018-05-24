@@ -21,14 +21,14 @@ using namespace std;
 vector<string> tokenize_line(uint nof_tokens_to_skip, const string& line);
 
 
+void _assert_do_not_intersect(vector<string> inputs, vector <string> outputs);
+
 void print_usage_exit() {
     cout << endl
          << "<tool>  <hoa_file> -s <inputs_outputs_file> [-f] [-v] [-moore] [-o] [-h]" << endl << endl
          << "-s      part file with two lines (example: first line: `.inputs i1 i2`, second line: `.outputs o1 o2`)" << endl
-         << "-f      you want a full model" << endl
-         << "        (with outputs defined along with the `bad` output)" << endl
          << "-moore  synthesize Moore machines (by default I synthesize Mealy)" << endl
-         << "-o      output file for a model" << endl
+         << "-o      output file for a model (not yet supported)" << endl
          << "-v      verbose output (default silent)" << endl
          << "-h      this help message" << endl;
     exit(0);
@@ -48,7 +48,6 @@ int main(int argc, char *argv[]) {
 
     // parse args
     auto hoa_file_name = string(argv[1]);
-    auto to_print_full_model = parser.cmdOptionExists("-f");
     auto signals_file_name = parser.getCmdOption("-s");
     auto output_file_name = parser.cmdOptionExists("-o") ? parser.getCmdOption("-o") : string("stdout");
     auto is_moore = parser.cmdOptionExists("-moore");
@@ -57,7 +56,6 @@ int main(int argc, char *argv[]) {
             << "hoa_file: " << hoa_file_name << ", "
             << "signals_file: " << signals_file_name << ", "
             << "is_moore: " << is_moore << ", "
-            << "full_model: " << to_print_full_model << ", "
             << "output_file: " << output_file_name;
 
     std::ifstream signals_file(signals_file_name);
@@ -68,14 +66,34 @@ int main(int argc, char *argv[]) {
     }
     vector<string> inputs = tokenize_line(1, line_inputs);
     vector<string> outputs = tokenize_line(1, line_outputs);
+    MASSERT(!outputs.empty(), "outputs are empty");
+    _assert_do_not_intersect(inputs, outputs);
 
     spot::parsed_aut_ptr pa = parse_aut(hoa_file_name, spot::make_bdd_dict());
     MASSERT(pa->format_errors(cerr) == 0, "error while reading HOA file");
     MASSERT (pa->aborted==0, "could not read HOA file: it is terminated with 'ABORT'");
 
-    Synth synthesizer(is_moore, inputs, outputs, pa->aut, output_file_name, to_print_full_model, 3600);
+    Synth synthesizer(is_moore, inputs, outputs, pa->aut, output_file_name, 3600);
     bool is_realizable = synthesizer.run();
     return is_realizable? 10:20;
+}
+
+
+void _assert_do_not_intersect(vector<string> inputs, vector <string> outputs) {
+
+    sort(inputs.begin(), inputs.end());
+    sort(outputs.begin(), outputs.end());
+
+    vector<string> intersection;
+    set_intersection(inputs.begin(), inputs.end(), outputs.begin(), outputs.end(),
+                     back_inserter(intersection));
+
+    if (!intersection.empty()) {
+        cerr << "Error: inputs/outputs have common signals:" << endl;
+        for (auto s: intersection)
+            cerr << "  " << s << endl;
+        MASSERT(0, "");
+    }
 }
 
 

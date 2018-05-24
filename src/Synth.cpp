@@ -90,8 +90,8 @@ void Synth::introduce_error_bdd() {
     // - state is accepting => state has a self-loop with true.
     L_INF("introduce_error_bdd..");
 
-    MASSERT(aut->is_sba() == spot::trival::yes_value, "");
-    MASSERT(aut->prop_terminal() == spot::trival::yes_value, "");
+    MASSERT(aut->is_sba() == spot::trival::yes_value, "is the automaton with Buechi-state acceptance?");
+    MASSERT(aut->prop_terminal() == spot::trival::yes_value, "is the automaton terminal?");
 
     error = cudd.bddZero();
     for (auto s = 0u; s < aut->num_states(); ++s)
@@ -655,19 +655,19 @@ uint Synth::walk(DdNode *a_dd) {
 }
 
 
-void Synth::model_to_aiger(const BDD &c_signal, const BDD &func) {
-    /// Update AIGER spec with a definition of `c_signal`
-
-    uint c_lit = aiger_by_cudd[c_signal.NodeReadIndex()];
-    string output_name = string(aiger_is_input(aiger_spec, c_lit)->name);  // save the name before it is freed
-
-    uint func_as_aiger_lit = walk(func.getNode());
-
-    aiger_redefine_input_as_and(aiger_spec, c_lit, func_as_aiger_lit, func_as_aiger_lit);
-
-    if (print_full_model)
-        aiger_add_output(aiger_spec, c_lit, output_name.c_str());
-}
+//void Synth::model_to_aiger(const BDD &c_signal, const BDD &func) {
+//    // Update AIGER spec with a definition of `c_signal`
+//
+//    uint c_lit = aiger_by_cudd[c_signal.NodeReadIndex()];
+//    string output_name = string(aiger_is_input(aiger_spec, c_lit)->name);  // save the name before it is freed
+//
+//    uint func_as_aiger_lit = walk(func.getNode());
+//
+//    aiger_redefine_input_as_and(aiger_spec, c_lit, func_as_aiger_lit, func_as_aiger_lit);
+//
+//    if (print_full_model)
+//        aiger_add_output(aiger_spec, c_lit, output_name.c_str());
+//}
 
 
 class Cleaner {
