@@ -7,6 +7,7 @@
 
 #include "Synth.hpp"
 #include "ArgsParser.hpp"
+#include "k_reduce.hpp"
 
 #define BDD spotBDD
 #include <spot/parseaut/public.hh>
@@ -72,6 +73,8 @@ int main(int argc, char *argv[]) {
     spot::parsed_aut_ptr pa = parse_aut(hoa_file_name, spot::make_bdd_dict());
     MASSERT(pa->format_errors(cerr) == 0, "error while reading HOA file");
     MASSERT (pa->aborted==0, "could not read HOA file: it is terminated with 'ABORT'");
+
+    k_reduce(pa->aut, 5);
 
     Synth synthesizer(is_moore, inputs, outputs, pa->aut, output_file_name, 3600);
     bool is_realizable = synthesizer.run();
