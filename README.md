@@ -9,7 +9,7 @@ and outputs `REALIZABLE` or `UNREALIZABLE` (thus, it is a realizability checker)
 The theory behind the tool is described in
 [Schewe and Finkbeiner](https://www.react.uni-saarland.de/publications/atva07.pdf) and
 [Kupferman](http://www.cse.huji.ac.il/~ornak/publications/lics06c.pdf).
-This tool is used by tool `kid_hoa.py` submitted to SYNTCOMP'18.
+This tool is used by tool `kid_hoa.py` submitted to SYNTCOMP'18 [link](https://github.com/5nizza/party-elli/tree/syntcomp18).
 But actually, `kid_hoa` adds nothing and does only boring stuff.
 
 Dependencies:
