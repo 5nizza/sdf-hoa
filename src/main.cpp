@@ -26,8 +26,9 @@ void _assert_do_not_intersect(vector<string> inputs, vector <string> outputs);
 
 void print_usage_exit() {
     cout << endl
-         << "<tool>  <hoa_file> -s <inputs_outputs_file> [-f] [-v] [-moore] [-o] [-h]" << endl << endl
+         << "<tool>  <hoa_file> -s <inputs_outputs_file> -k <k> [-f] [-v] [-moore] [-o] [-h]" << endl << endl
          << "-s      part file with two lines (example: first line: `.inputs i1 i2`, second line: `.outputs o1 o2`)" << endl
+         << "-k      the maximum number of times the same bad state can be visited (thus, it is reset between SCCs)" << endl
          << "-moore  synthesize Moore machines (by default I synthesize Mealy)" << endl
          << "-o      output file for a model (not yet supported)" << endl
          << "-v      verbose output (default silent)" << endl
@@ -38,7 +39,7 @@ void print_usage_exit() {
 
 int main(int argc, char *argv[]) {
     ArgsParser parser(argc, argv, 2);
-    if (parser.cmdOptionExists("-h") || argc < 4 || !parser.cmdOptionExists("-s"))
+    if (parser.cmdOptionExists("-h") || argc < 5 || !parser.cmdOptionExists("-s") || !parser.cmdOptionExists("-k"))
         print_usage_exit();
 
     // setup logging
@@ -52,10 +53,14 @@ int main(int argc, char *argv[]) {
     auto signals_file_name = parser.getCmdOption("-s");
     auto output_file_name = parser.cmdOptionExists("-o") ? parser.getCmdOption("-o") : string("stdout");
     auto is_moore = parser.cmdOptionExists("-moore");
+    auto _k = stoi(parser.getCmdOption("-k"));
+    MASSERT(_k>=0, "k must be >= 0: " << _k);
+    auto k = (uint)_k;
 
     spdlog::get("console")->info()
             << "hoa_file: " << hoa_file_name << ", "
             << "signals_file: " << signals_file_name << ", "
+            << "k: " << k << ", "
             << "is_moore: " << is_moore << ", "
             << "output_file: " << output_file_name;
 
@@ -74,10 +79,11 @@ int main(int argc, char *argv[]) {
     MASSERT(pa->format_errors(cerr) == 0, "error while reading HOA file");
     MASSERT (pa->aborted==0, "could not read HOA file: it is terminated with 'ABORT'");
 
-    k_reduce(pa->aut, 5);
+    auto k_aut = k_reduce(pa->aut, k);
 
-    Synth synthesizer(is_moore, inputs, outputs, pa->aut, output_file_name, 3600);
+    Synth synthesizer(is_moore, inputs, outputs, k_aut, output_file_name, 3600);
     bool is_realizable = synthesizer.run();
+
     return is_realizable? 10:20;
 }
 

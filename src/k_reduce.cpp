@@ -20,7 +20,7 @@ using namespace std;
 
 struct kState {
     uint state;
-    uint k;
+    uint k;      // "how many times I can exit an accepting state"; 0 means that the next "bad" exit leads to the sink.
 
     kState(uint state_, uint k_) : state(state_), k(k_) {}
 
@@ -66,10 +66,7 @@ bool is_acc_sink(const spot::twa_graph_ptr &aut, uint state) {
 }
 
 
-spot::twa_graph_ptr k_reduce(const spot::twa_graph_ptr &aut, uint max_k) {
-    // `max_k` is the number of times an accepting state can be exited.
-
-    MASSERT(max_k > 0, "max_k must be positive: " << max_k);
+spot::twa_graph_ptr k_reduce(const spot::twa_graph_ptr &aut, uint max_nof_visits) {
     MASSERT(aut->is_sba() == spot::trival::yes_value, "currently, only SBA is supported");
 
     auto k_aut = make_twa_graph(aut->get_dict());
@@ -83,15 +80,15 @@ spot::twa_graph_ptr k_reduce(const spot::twa_graph_ptr &aut, uint max_k) {
     unordered_set<kState> kstates_to_process;
     unordered_set<kState> processed_kstates;
 
-    auto init_kstate = kState(k_aut->new_state(), max_k);
+    auto init_kstate = kState(k_aut->new_state(), max_nof_visits);
     k_aut->set_init_state(init_kstate.state);
 
-    kstate_by_state_k.emplace(make_pair(aut->get_init_state_number(), max_k),
+    kstate_by_state_k.emplace(make_pair(aut->get_init_state_number(), max_nof_visits),
                               init_kstate);
     state_by_kstate.emplace(init_kstate,
                             aut->get_init_state_number());
 
-    auto acc_ksink = kState(k_aut->new_state(), 0);
+    auto acc_ksink = kState(k_aut->new_state(), (uint)-1);
     k_aut->new_acc_edge(acc_ksink.state, acc_ksink.state, bdd_true());
 
     kstates_to_process.insert(init_kstate);
@@ -102,21 +99,22 @@ spot::twa_graph_ptr k_reduce(const spot::twa_graph_ptr &aut, uint max_k) {
         kstates_to_process.erase(src_kstate);
         processed_kstates.insert(src_kstate);
 
-        MASSERT(src_kstate.k >= 1, "k < 1 is impossible: " << src_kstate.k);
-
         for (auto &t: aut->out(state_by_kstate.find(src_kstate)->second)) {
             kState dst_kstate(666, 666);  // uninitialized
 
-            uint dst_k = scc_info.scc_of(t.src) == scc_info.scc_of(t.dst)
-                         ?
-                         src_kstate.k - aut->state_is_accepting(t.src)
-                         : max_k;
-            if (dst_k == 0 || is_acc_sink(aut, t.dst))
+            int dst_k = scc_info.scc_of(t.src) == scc_info.scc_of(t.dst)
+                        ?
+                        (int)src_kstate.k - aut->state_is_accepting(t.src)
+                        : (int)max_nof_visits;
+            if (dst_k == -1 || is_acc_sink(aut, t.dst))
                 dst_kstate = acc_ksink;
             else {
                 auto dst_k_pair = make_pair(t.dst, dst_k);
-                if (kstate_by_state_k.find(dst_k_pair) == kstate_by_state_k.end())
-                    kstate_by_state_k.emplace(dst_k_pair, kState(k_aut->new_state(), dst_k));
+                if (kstate_by_state_k.find(dst_k_pair) == kstate_by_state_k.end()) {
+                    auto kstate = kState(k_aut->new_state(), (uint)dst_k);
+                    kstate_by_state_k.emplace(dst_k_pair, kstate);
+                    state_by_kstate.emplace(kstate, t.dst);
+                }
                 dst_kstate = kstate_by_state_k.find(dst_k_pair)->second;
             }
             k_aut->new_edge(src_kstate.state, dst_kstate.state, t.cond);
