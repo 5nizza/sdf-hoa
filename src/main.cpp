@@ -4,9 +4,9 @@
 #include <string>
 
 #include <spdlog/spdlog.h>
+#include <args.hxx>
 
 #include "Synth.hpp"
-#include "ArgsParser.hpp"
 #include "k_reduce.hpp"
 
 #define BDD spotBDD
@@ -24,38 +24,65 @@ vector<string> tokenize_line(uint nof_tokens_to_skip, const string& line);
 
 void _assert_do_not_intersect(vector<string> inputs, vector <string> outputs);
 
-void print_usage_exit() {
-    cout << endl
-         << "<tool>  <hoa_file> -s <inputs_outputs_file> -k <k> [-f] [-v] [-moore] [-o] [-h]" << endl << endl
-         << "-s      part file with two lines (example: first line: `.inputs i1 i2`, second line: `.outputs o1 o2`)" << endl
-         << "-k      the maximum number of times the same bad state can be visited (thus, it is reset between SCCs)" << endl
-         << "-moore  synthesize Moore machines (by default I synthesize Mealy)" << endl
-         << "-o      output file for a model (not yet supported)" << endl
-         << "-v      verbose output (default silent)" << endl
-         << "-h      this help message" << endl;
-    exit(0);
-}
 
 
-int main(int argc, char *argv[]) {
-    ArgsParser parser(argc, argv, 2);
-    if (parser.cmdOptionExists("-h") || argc < 5 || !parser.cmdOptionExists("-s") || !parser.cmdOptionExists("-k"))
-        print_usage_exit();
+int main(int argc, const char *argv[]) {
+    args::ArgumentParser parser("Synthesizer from finite automata (universal co-reachability)");
+    parser.helpParams.width = 100;
+    parser.helpParams.helpindent = 26;
+
+    args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"});
+
+    args::Positional<std::string> hoa_arg(parser, "hoa", "HOA automaton file (universal co-reachability)",
+                                          args::Options::Required);
+    args::Positional<std::string> signals_arg(parser,
+                                              "signals",
+                                              "part file with two lines \n(example: first line: `.inputs i1 i2`, second line: `.outputs o1 o2`)",
+                                              args::Options::Required);
+    args::ValueFlag<uint> k_arg(parser,
+                                "k",
+                                "the maximum number of times the same bad state can be visited (thus, it is reset between SCCs)"
+                                "(default:8)",
+                                {'k'},
+                                8);
+    args::Flag is_moore_flag(parser, "moore", "synthesize Moore machines (by default I synthesize Mealy)", {"moore"});
+    args::Flag verbose_flag(parser, "v", "verbose mode (the default is silent)", {'v'});
+
+    args::ValueFlag<string> output_name(parser,
+                                        "o",
+                                        "the output file name (not yet supported)",
+                                        {'o'});
+
+    try {
+        parser.ParseCLI(argc, argv);
+    }
+    catch (args::Help&) {
+        std::cout << parser;
+        return 0;
+    }
+    catch (args::ParseError& e) {
+        std::cerr << e.what() << std::endl;
+        std::cerr << parser;
+        return 1;
+    }
+    catch (args::ValidationError& e) {
+        std::cerr << e.what() << std::endl;
+        std::cerr << parser;
+        return 1;
+    }
 
     // setup logging
     auto console = spdlog::stdout_logger_mt("console", false);
     spdlog::set_pattern("%H:%M:%S %v ");
-    if (!parser.cmdOptionExists("-v"))
+    if (!verbose_flag)
         spdlog::set_level(spdlog::level::off);
 
     // parse args
-    auto hoa_file_name = string(argv[1]);
-    auto signals_file_name = parser.getCmdOption("-s");
-    auto output_file_name = parser.cmdOptionExists("-o") ? parser.getCmdOption("-o") : string("stdout");
-    auto is_moore = parser.cmdOptionExists("-moore");
-    auto _k = stoi(parser.getCmdOption("-k"));
-    MASSERT(_k>=0, "k must be >= 0: " << _k);
-    auto k = (uint)_k;
+    string hoa_file_name(hoa_arg.Get());
+    string signals_file_name(signals_arg.Get());
+    string output_file_name(output_name ? output_name.Get() : "stdout");
+    uint k(k_arg.Get());
+    bool is_moore(is_moore_flag? true:false);
 
     spdlog::get("console")->info()
             << "hoa_file: " << hoa_file_name << ", "
@@ -99,7 +126,7 @@ void _assert_do_not_intersect(vector<string> inputs, vector <string> outputs) {
 
     if (!intersection.empty()) {
         cerr << "Error: inputs/outputs have common signals:" << endl;
-        for (auto s: intersection)
+        for (const auto& s: intersection)
             cerr << "  " << s << endl;
         MASSERT(0, "");
     }
