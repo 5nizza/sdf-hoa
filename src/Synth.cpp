@@ -17,50 +17,21 @@
 #include "Synth.hpp"
 
 
-#define IS_NEGATED(l) ((l & 1) == 1)
-#define STRIP_LIT(lit) (lit & ~1)
-#define NEGATED(lit) (lit ^ 1)
+//#define IS_NEGATED(l) ((l & 1) == 1)
+//#define STRIP_LIT(lit) (lit & ~1)
+//#define NEGATED(lit) (lit ^ 1)
 
 
 #define L_INF(message) {spdlog::get("console")->info() << message;}
+
+
+using namespace std;
 
 
 #define hmap unordered_map
 typedef unsigned uint;
 typedef vector<uint> VecUint;
 typedef unordered_set<uint> SetUint;
-
-
-
-BDD Synth::get_bdd_for_sign_lit(uint lit) {
-    /* lit is an AIGER variable index with a 'sign' */
-
-    if (bdd_by_aiger_unlit.find(STRIP_LIT(lit)) != bdd_by_aiger_unlit.end()) {
-        BDD res = bdd_by_aiger_unlit[STRIP_LIT(lit)];
-        if (IS_NEGATED(lit))
-            return ~res;
-    }
-
-    uint stripped_lit = STRIP_LIT(lit);
-    BDD res;
-
-    if (stripped_lit == 0) {
-        res = cudd.bddZero();
-    }
-    else if (aiger_is_input(aiger_spec, stripped_lit) ||
-             aiger_is_latch(aiger_spec, stripped_lit)) {
-        res = cudd.ReadVars(cudd_by_aiger[stripped_lit]);
-//        MASSERT(res.NodeReadIndex() == stripped_lit/2, "that bug again: impossible: " << res.NodeReadIndex() << " vs " << stripped_lit/2 );
-    }
-    else { // aiger_and
-        aiger_and *and_ = aiger_is_and(aiger_spec, stripped_lit);
-        res = get_bdd_for_sign_lit(and_->rhs0) & get_bdd_for_sign_lit(and_->rhs1);
-    }
-
-    bdd_by_aiger_unlit[stripped_lit] = res;
-
-    return IS_NEGATED(lit) ? (~res):res;
-}
 
 
 vector<BDD> Synth::get_controllable_vars_bdds() {
@@ -113,20 +84,20 @@ void Synth::compose_init_state_bdd() {
 }
 
 
-BDD bdd_from_p_name(const string& p_name,
-                    const vector<string>& inputs_outputs,
+BDD bdd_from_p_name(const spot::formula& p,
+                    const vector<spot::formula>& inputs_outputs,
                     Cudd& cudd) {
     long idx = distance(inputs_outputs.begin(),
-                        find(inputs_outputs.begin(), inputs_outputs.end(), p_name));
-    MASSERT(idx < (long) inputs_outputs.size(), "idx is out of range for p_name: " << p_name);
+                        find(inputs_outputs.begin(), inputs_outputs.end(), p));
+    MASSERT(idx < (long) inputs_outputs.size(), "idx is out of range for proposition: " << p);
     BDD p_bdd = cudd.bddVar((int) idx);
     return p_bdd;
 }
 
 
-BDD translate_formula_into_cuddBDD(const spot::formula &formula,
-                                   vector<string> &inputs_outputs,
-                                   Cudd &cudd) {
+BDD translate_formula_into_cuddBDD(const spot::formula& formula,
+                                   vector<spot::formula>& inputs_outputs,
+                                   Cudd& cudd) {
     // formula is the sum of products (i.e., in DNF)
     if (formula.is(spot::op::Or)) {
         BDD cudd_bdd = cudd.bddZero();
@@ -143,11 +114,11 @@ BDD translate_formula_into_cuddBDD(const spot::formula &formula,
     }
 
     if (formula.is(spot::op::ap))
-        return bdd_from_p_name(formula.ap_name(), inputs_outputs, cudd);
+        return bdd_from_p_name(formula, inputs_outputs, cudd);
 
     if (formula.is(spot::op::Not)) {
         MASSERT(formula[0].is(spot::op::ap), formula);
-        return ~bdd_from_p_name(formula[0].ap_name(), inputs_outputs, cudd);
+        return ~bdd_from_p_name(formula[0], inputs_outputs, cudd);
     }
 
     if (formula.is(spot::op::tt))
@@ -282,7 +253,7 @@ get_group_candidates(const vector<VecUint >& orders,
 void remove_intersecting(SetUint group,
                          vector<SetUint> &groups)
 {
-    vector<SetUint >::iterator it = groups.begin();
+    vector<SetUint>::iterator it = groups.begin();
     while (it != groups.end()) {
         if (do_intersect(group, *it))
             it = groups.erase(it);
@@ -513,11 +484,11 @@ hmap<uint,BDD> Synth::extract_output_funcs() {
     while (!controls.empty()) {
         BDD c = controls.back(); controls.pop_back();
 
-        aiger_symbol *aiger_input = aiger_is_input(aiger_spec, aiger_by_cudd[c.NodeReadIndex()]);
-        L_INF("getting output function for " << aiger_input->name);
+//        aiger_symbol *aiger_input = aiger_is_input(aiger_spec, aiger_by_cudd[c.NodeReadIndex()]);
+//        L_INF("getting output function for " << aiger_input->name);
 
         BDD c_arena;
-        if (controls.size() > 0) {
+        if (!controls.empty()) {
             BDD cube = cudd.bddComputeCube(controls.data(), nullptr, (int)controls.size());
             c_arena = non_det_strategy.ExistAbstract(cube);
         }
@@ -569,113 +540,6 @@ hmap<uint,BDD> Synth::extract_output_funcs() {
 
     return model_by_cuddidx;
 }
-
-
-uint Synth::next_lit() {
-    /* return: next possible to add to the spec literal */
-    return (aiger_spec->maxvar + 1) * 2;
-}
-
-
-uint Synth::get_optimized_and_lit(uint a_lit, uint b_lit) {
-    if (a_lit == 0 || b_lit == 0)
-        return 0;
-
-    if (a_lit == 1 && b_lit == 1)
-        return 1;
-
-    if (a_lit == 1)
-        return b_lit;
-
-    if (b_lit == 1)
-        return a_lit;
-
-    if (a_lit > 1 && b_lit > 1) {
-        uint a_b_lit = next_lit();
-        aiger_add_and(aiger_spec, a_b_lit, a_lit, b_lit);
-        return a_b_lit;
-    }
-
-    MASSERT(0, "impossible");
-}
-
-
-uint Synth::walk(DdNode *a_dd) {
-    /**
-    Walk given DdNode node (recursively).
-    If a given node requires intermediate AND gates for its representation, the function adds them.
-        Literal representing given input node is `not` added to the spec.
-
-    :returns: literal representing input node
-    **/
-
-    // caching
-    static hmap<DdNode*, uint> cache;
-    {
-        auto cached_lit = cache.find(Cudd_Regular(a_dd));
-        if (cached_lit != cache.end())
-            return Cudd_IsComplement(a_dd) ? NEGATED(cached_lit->second) : cached_lit->second;
-    }
-    // end of caching
-
-    if (Cudd_IsConstant(a_dd))
-        return (uint) (a_dd == cudd.bddOne().getNode());  // in aiger: 0 is False and 1 is True
-
-    // get an index of the variable
-    uint a_lit = aiger_by_cudd[Cudd_NodeReadIndex(a_dd)];
-
-    DdNode *t_bdd = Cudd_T(a_dd);
-    DdNode *e_bdd = Cudd_E(a_dd);
-
-    uint t_lit = walk(t_bdd);
-    uint e_lit = walk(e_bdd);
-
-    // ite(a_bdd, then_bdd, else_bdd)
-    // = a*then + !a*else
-    // = !(!(a*then) * !(!a*else))
-    // -> in general case we need 3 more ANDs
-
-    uint a_t_lit = get_optimized_and_lit(a_lit, t_lit);
-
-    uint na_e_lit = get_optimized_and_lit(NEGATED(a_lit), e_lit);
-
-    uint n_a_t_lit = NEGATED(a_t_lit);
-    uint n_na_e_lit = NEGATED(na_e_lit);
-
-    uint and_lit = get_optimized_and_lit(n_a_t_lit, n_na_e_lit);
-
-    uint res = NEGATED(and_lit);
-
-    cache[Cudd_Regular(a_dd)] = res;
-
-    if (Cudd_IsComplement(a_dd))
-        res = NEGATED(res);
-
-    return res;
-}
-
-
-//void Synth::model_to_aiger(const BDD &c_signal, const BDD &func) {
-//    // Update AIGER spec with a definition of `c_signal`
-//
-//    uint c_lit = aiger_by_cudd[c_signal.NodeReadIndex()];
-//    string output_name = string(aiger_is_input(aiger_spec, c_lit)->name);  // save the name before it is freed
-//
-//    uint func_as_aiger_lit = walk(func.getNode());
-//
-//    aiger_redefine_input_as_and(aiger_spec, c_lit, func_as_aiger_lit, func_as_aiger_lit);
-//
-//    if (print_full_model)
-//        aiger_add_output(aiger_spec, c_lit, output_name.c_str());
-//}
-
-
-class Cleaner {
-public:
-    aiger* spec;
-    Cleaner(aiger* spec): spec(spec) { }
-    ~Cleaner() { aiger_reset(spec); }
-};
 
 
 void init_cudd(Cudd& cudd) {
