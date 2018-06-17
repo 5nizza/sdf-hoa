@@ -2,8 +2,7 @@
 // Created by ayrat on 31/05/18.
 //
 
-#ifndef SDF_HOA_UTILS_HPP
-#define SDF_HOA_UTILS_HPP
+#pragma once
 
 #include <memory>
 #include <iostream>
@@ -109,4 +108,16 @@ std::tuple<int, std::string, std::string> execute(const char* cmd);
 std::tuple<int, std::string, std::string> execute(const std::string& cmd);
 
 
-#endif //SDF_HOA_UTILS_HPP
+/**
+ * Similar to python's range.
+ * @return [min, min+1, ..., max_excluded)
+ */
+template <typename T>
+inline
+std::vector<T> range(const T& min, const T& max_excluded)  // T to be able to use with int and uint, etc.
+{
+    std::vector<T> numbers;
+    for (auto i = min; i < max_excluded; ++i)
+        numbers.push_back(i);
+    return numbers;
+}

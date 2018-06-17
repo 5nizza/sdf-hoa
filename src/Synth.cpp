@@ -133,7 +133,7 @@ void Synth::compose_transition_vector() {
 
     const spot::bdd_dict_ptr& spot_bdd_dict = aut->get_dict();
 
-    L_INF("Atomic propositions explicitly used by the automaton:");
+    L_INF("Atomic propositions explicitly used by the automaton (" << aut->ap().size() << "):");
     for (const spot::formula& ap: aut->ap())
         L_INF(' ' << ap << " (=" << spot_bdd_dict->varnum(ap) << ')');
 

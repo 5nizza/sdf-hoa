@@ -1,6 +1,4 @@
-#ifndef SDF_LTL_PARSER_H
-#define SDF_LTL_PARSER_H
-
+#pragma once
 
 #include <string>
 #include <tuple>
@@ -16,6 +14,3 @@
  */
 std::tuple<spot::formula, std::vector<spot::formula>, std::vector<spot::formula>>
 parse_tlsf(const std::string& tlsf_file_name);
-
-
-#endif //SDF_LTL_PARSER_H

@@ -3,7 +3,6 @@
 //
 
 #include <unordered_map>
-#include <unordered_set>
 
 
 #define BDD spotBDD
@@ -20,7 +19,7 @@ using namespace std;
 
 struct kState {
     uint state;
-    uint k;      // "how many times I can exit an accepting state"; 0 means that the next "bad" exit leads to the sink.
+    uint k;      // "how many times can I exit an accepting state"; 0 means that the next "bad" exit leads to the sink.
 
     kState(uint state_, uint k_) : state(state_), k(k_) {}
 
@@ -66,8 +65,9 @@ bool is_acc_sink(const spot::twa_graph_ptr &aut, uint state) {
 }
 
 
-spot::twa_graph_ptr k_reduce(const spot::twa_graph_ptr &aut, uint max_nof_visits) {
-    MASSERT(aut->is_sba() == spot::trival::yes_value, "currently, only SBA is supported");
+spot::twa_graph_ptr k_reduce(const spot::twa_graph_ptr &aut, uint max_nof_visits)
+{
+    MASSERT(aut->is_sba().is_true(), "currently, only SBA is supported");
 
     auto k_aut = make_twa_graph(aut->get_dict());
     k_aut->set_buchi();
@@ -76,54 +76,53 @@ spot::twa_graph_ptr k_reduce(const spot::twa_graph_ptr &aut, uint max_nof_visits
 
     // `state` is a state of `aut`, `kstate` is a state of `k_aut`
     unordered_map<pair<uint, uint>, kState, pair_hash> kstate_by_state_k;
-    unordered_map<kState, uint> state_by_kstate;
-    unordered_set<kState> kstates_to_process;
-    unordered_set<kState> processed_kstates;
+    vector<pair<kState, uint>> kstate_state_to_process;
 
     auto init_kstate = kState(k_aut->new_state(), max_nof_visits);
     k_aut->set_init_state(init_kstate.state);
 
     kstate_by_state_k.emplace(make_pair(aut->get_init_state_number(), max_nof_visits),
                               init_kstate);
-    state_by_kstate.emplace(init_kstate,
-                            aut->get_init_state_number());
 
     auto acc_ksink = kState(k_aut->new_state(), (uint)-1);
     k_aut->new_acc_edge(acc_ksink.state, acc_ksink.state, bdd_true());
 
-    kstates_to_process.insert(init_kstate);
-    processed_kstates.insert(acc_ksink);
+    kstate_state_to_process.emplace_back(init_kstate, aut->get_init_state_number());
 
-    while (!kstates_to_process.empty()) {
-        auto src_kstate = *kstates_to_process.begin();
-        kstates_to_process.erase(src_kstate);
-        processed_kstates.insert(src_kstate);
+    while (!kstate_state_to_process.empty())
+    {
+        kState src_kstate(666, 666);
+        uint src_state;
+        tie(src_kstate, src_state) = kstate_state_to_process.back();
+        kstate_state_to_process.erase(kstate_state_to_process.end()-1);
 
-        for (auto &t: aut->out(state_by_kstate.find(src_kstate)->second)) {
-            kState dst_kstate(666, 666);  // uninitialized
-
+        for (const auto &t: aut->out(src_state))
+        {
             int dst_k = scc_info.scc_of(t.src) == scc_info.scc_of(t.dst)
                         ?
                         (int)src_kstate.k - aut->state_is_accepting(t.src)
                         : (int)max_nof_visits;
+
             if (dst_k == -1 || is_acc_sink(aut, t.dst))
-                dst_kstate = acc_ksink;
-            else {
-                auto dst_k_pair = make_pair(t.dst, dst_k);
-                if (kstate_by_state_k.find(dst_k_pair) == kstate_by_state_k.end()) {
-                    auto kstate = kState(k_aut->new_state(), (uint)dst_k);
-                    kstate_by_state_k.emplace(dst_k_pair, kstate);
-                    state_by_kstate.emplace(kstate, t.dst);
-                }
-                dst_kstate = kstate_by_state_k.find(dst_k_pair)->second;
+            {
+                k_aut->new_edge(src_kstate.state, acc_ksink.state, t.cond);
+                continue;
             }
-            k_aut->new_edge(src_kstate.state, dst_kstate.state, t.cond);
-            if (processed_kstates.find(dst_kstate) == processed_kstates.end())
-                kstates_to_process.insert(dst_kstate);
+
+            auto pair_dst_k = make_pair(t.dst, dst_k);
+            auto dst_kstateIt = kstate_by_state_k.find(pair_dst_k);
+            if (dst_kstateIt == kstate_by_state_k.end())
+            {
+                auto dst_kstate = kState(k_aut->new_state(), (uint)dst_k);
+                tie(dst_kstateIt, ignore) = kstate_by_state_k.emplace(pair_dst_k, dst_kstate);
+                kstate_state_to_process.emplace_back(dst_kstate, t.dst);
+            }
+            k_aut->new_edge(src_kstate.state, dst_kstateIt->second.state, t.cond);
         }
     }
 
-    k_aut->prop_terminal(spot::trival::yes_value);
-    k_aut->prop_state_acc(spot::trival::yes_value);
+    k_aut->prop_terminal(true);
+    k_aut->prop_state_acc(true);
+
     return k_aut;
 }

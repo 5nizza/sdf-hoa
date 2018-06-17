@@ -2,9 +2,7 @@
 // Created by ayrat on 24/05/16.
 //
 
-#ifndef SDF_MYASSERT_H
-#define SDF_MYASSERT_H
-
+#pragma once
 
 #include <iostream>
 
@@ -17,5 +15,3 @@
         abort();                                                                        \
     }                                                                                   \
 }
-
-#endif //SDF_MYASSERT_H

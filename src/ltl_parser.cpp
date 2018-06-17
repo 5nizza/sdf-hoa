@@ -49,7 +49,7 @@ parse_tlsf(const string& tlsf_file_name)
 
     tie(rc, out, err) = execute("syfco -f ltlxba -m fully " + tlsf_file_name);
     MASSERT(rc == 0 && err.empty(),
-            "syfco exited with non-zero status or non-empty stderr: " + to_str(rc, out, err));
+            "syfco exited with non-zero status or non-empty stderr: \n" + to_str(rc, out, err));
 
     auto parsed_formula = spot::parse_infix_psl(out);
     if (!parsed_formula.errors.empty())
