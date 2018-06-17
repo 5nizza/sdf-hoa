@@ -35,8 +35,6 @@ bool check_real(spot::twa_graph_ptr ucw_aut,
 {
     auto k_aut = k_reduce(ucw_aut, k);
 
-    cout << k_aut->ap().size() << endl;
-
     Synth synthesizer(is_moore, inputs, outputs, k_aut, output_file_name, 3600);
     bool is_realizable = synthesizer.run();
     return is_realizable;
@@ -141,7 +139,6 @@ int main(int argc, const char *argv[])
     translator.set_pref(spot::postprocessor::SBAcc);
     translator.set_level(spot::postprocessor::Medium);  // on some examples the high optimization is the bottleneck (TODO: double-check)
     spot::twa_graph_ptr aut = translator.run(neg_formula);
-    cout << aut->ap().size() << endl;  // TODO: remove me
 
     for (auto k: (k_list.size() == 2?
                   range(k_list[0], k_list[1]+1):
@@ -153,7 +150,6 @@ int main(int argc, const char *argv[])
     }
     // CURRENT:
     // - I implemented the arguments for k
-    // - noticed a strange thing about AP of the new automaton (it has none), and asked a question
     // NEXT:
     // - fix that strange issue with APs (no need to do any checks, so probably just remove them)
     // - implement the final tool

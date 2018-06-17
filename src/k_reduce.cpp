@@ -71,6 +71,7 @@ spot::twa_graph_ptr k_reduce(const spot::twa_graph_ptr &aut, uint max_nof_visits
 
     auto k_aut = make_twa_graph(aut->get_dict());
     k_aut->set_buchi();
+    k_aut->copy_ap_of(aut);
 
     spot::scc_info scc_info(aut);
 
