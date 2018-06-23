@@ -8,3 +8,4 @@ ltl_parser.hpp
 ltl_parser.cpp
 utils.hpp
 utils.cpp
+syntcomp_constants.hpp

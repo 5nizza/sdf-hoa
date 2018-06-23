@@ -1,5 +1,3 @@
-add_definitions(-DSYSTEMTYPE="Linux")
-
 file(STRINGS extrasources.make project_FILES)   # AK: WHY this way?
 foreach(fil ${project_FILES})
   string(REPLACE " " "" fil ${fil})

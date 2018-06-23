@@ -1,0 +1,13 @@
+//
+// Created by ayrat on 23/06/18.
+//
+#pragma once
+
+#define SYNTCOMP_RC_REAL 10
+#define SYNTCOMP_RC_UNREAL 20
+#define SYNTCOMP_RC_UNKNOWN 30
+
+
+#define SYNTCOMP_STR_REAL "REALIZABLE"
+#define SYNTCOMP_STR_UNREAL "UNREALIZABLE"
+#define SYNTCOMP_STR_UNKNOWN "UNKNOWN"

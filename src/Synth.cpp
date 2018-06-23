@@ -572,13 +572,7 @@ bool Synth::run() {
     win_region = calc_win_region();
     L_INF("calc_win_region took (sec): " << timer.sec_restart());
 
-    if (win_region.IsZero()) {
-        cout << "UNREALIZABLE" << endl;
-        return false;
-    }
-
-    cout << "REALIZABLE" << endl;
-    return true;
+    return win_region.IsZero() ? false : true;
 
     // solve the game
     // output the result

@@ -2,9 +2,7 @@
 // Created by ayrat on yestoday.
 //
 
-#ifndef SDF_SYNTH_H
-#define SDF_SYNTH_H
-
+#pragma once
 
 #include <vector>
 #include <string>
@@ -107,6 +105,3 @@ private:
 
     std::vector<BDD> get_substitution();
 };
-
-
-#endif //SDF_SYNTH_H

@@ -19,6 +19,7 @@ Dependencies:
 - spot-2.5.3
 - spdlog
 - [args](https://github.com/Taywee/args): it should be placed into `third_party` folder (see `CMakeLists.txt`)
+- TODO: the testing framework depends on google-test, clarify this (see `CMakeLists.txt` in the folder `tests`)
 
 To build, install dependencies into folder `third_parties`.
 Then:
