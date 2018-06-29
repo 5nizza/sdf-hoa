@@ -84,8 +84,6 @@ int main(int argc, const char *argv[])
     }
 
     // setup logging
-    auto console = spdlog::stdout_logger_mt("console", false);
-    spdlog::set_pattern("%H:%M:%S %v ");
     if (!verbose_flag)
         spdlog::set_level(spdlog::level::off);
 

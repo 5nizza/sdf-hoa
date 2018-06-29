@@ -15,6 +15,20 @@ using namespace sdf;
 using namespace ak_utils;
 
 
+// Ensures that the logger "console" exists
+struct Initializer
+{
+    std::shared_ptr<spdlog::logger> logger;
+
+    Initializer()
+    {
+        logger = spdlog::stdout_logger_mt("console", false);
+        spdlog::set_pattern("%H:%M:%S %v ");
+    }
+};
+Initializer libraryInitializer;
+
+
 int sdf::run(const std::string &tlsf_file_name,
              bool check_unreal,
              const std::vector <uint> &k_to_iterate,

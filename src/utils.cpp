@@ -9,7 +9,7 @@
 
 #include <pstream.h>
 #include <tuple>
-
+#include <cassert>
 
 using namespace std;
 
@@ -36,5 +36,9 @@ tuple<int, string, string> ak_utils::execute(const char* cmd)
     proc.close();
     if (proc.rdbuf()->exited())
         return tuple<int,string, string>(proc.rdbuf()->status(), out.str(), err.str());
+
+    // this should be unreachable, the code is to silence the warnings
+    assert(0);
+    return tuple<int,string, string>(-1, "", "");
 }
 

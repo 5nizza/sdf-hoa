@@ -7,6 +7,7 @@
 
 #include "gtest/gtest.h"
 #include "syntcomp_constants.hpp"
+#include "synthesizer.hpp"
 
 
 using namespace std;
@@ -44,10 +45,11 @@ const vector<string> real_specs =
 };
 
 
-/// @returns: return code of the tool execution
+/// @returns: return_code of the tool execution
 bool execute_tool(const string& name)
 {
-    cout << name << endl;
+    auto rc = sdf::run("./specs/" + name, true, {1, 2, 3}, "");
+    cout << name << ", rc: " << rc << endl;
     return true;
 }
 
