@@ -108,11 +108,10 @@ int main(int argc, const char *argv[])
 
     // PAST:
     // - implemented non-parallel version of the tool
-    // - added tests framework
+    // - finished tests
     /// CURRENT:
-    /// - finish tests (see tests.cpp)
+    /// - implement the parallel version of the tool
     // FUTURE:
-    // - implement the parallel version of the tool
     // - extract AIGER models
 }
 

@@ -93,18 +93,7 @@ INSTANTIATE_TEST_CASE_P(RealAndUnreal,
                         ::testing::ValuesIn(specs));
 
 
-// PAST:
-// - just added the tools, using parameterized tests, see:
-//   https://stackoverflow.com/questions/19160244/create-tests-at-run-time-google-test
-//   https://github.com/google/googletest/blob/master/googletest/docs/advanced.md#value-parameterized-tests
-//   https://www.youtube.com/watch?v=8Up5eNZ0FLw
-/// CURRENT:
-/// - the testing code itself is not finished:
-///   - run the tool (either via command line or directly)
-///   - check dual cases (run unreal check for real and vice versa)
-///  Note: may be rewrite instantiations, using only one, and introduce SpecParams struct
-
-
+/// For future: good to check the exact values of parameter k that makes specs realizable.
 
 int main(int argc, char **argv)
 {
