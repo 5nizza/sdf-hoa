@@ -8,13 +8,13 @@
 
 
 #define BDD spotBDD
-#include <spot/twa/twagraph.hh>
-#include <spot/twa/bddprint.hh>
-#include <spot/twa/formula2bdd.hh>
+    #include <spot/twa/twagraph.hh>
+    #include <spot/twa/bddprint.hh>
+    #include <spot/twa/formula2bdd.hh>
 #undef BDD
 
 
-#include "Synth.hpp"
+#include "game_solver.hpp"
 
 
 //#define IS_NEGATED(l) ((l & 1) == 1)
@@ -34,7 +34,7 @@ typedef vector<uint> VecUint;
 typedef unordered_set<uint> SetUint;
 
 
-vector<BDD> Synth::get_controllable_vars_bdds() {
+vector<BDD> sdf::GameSolver::get_controllable_vars_bdds() {
     vector<BDD> result;
     for (ulong i = inputs.size(); i < inputs_outputs.size(); ++i) {
         BDD var_bdd = cudd.bddVar(static_cast<int>(i));
@@ -44,7 +44,7 @@ vector<BDD> Synth::get_controllable_vars_bdds() {
 }
 
 
-vector<BDD> Synth::get_uncontrollable_vars_bdds() {
+vector<BDD> sdf::GameSolver::get_uncontrollable_vars_bdds() {
     vector<BDD> result;
     for (uint i = 0; i < inputs.size(); ++i) {
         BDD var_bdd = cudd.bddVar(i);
@@ -54,7 +54,7 @@ vector<BDD> Synth::get_uncontrollable_vars_bdds() {
 }
 
 
-void Synth::introduce_error_bdd() {
+void sdf::GameSolver::introduce_error_bdd() {
     // Error BDD is true on reaching any of the accepting states.
     // Assumptions:
     // - acceptance is state-based,
@@ -71,7 +71,7 @@ void Synth::introduce_error_bdd() {
 }
 
 
-void Synth::compose_init_state_bdd() {
+void sdf::GameSolver::compose_init_state_bdd() {
     L_INF("compose_init_state_bdd..");
 
     // Initial state is 'the latch of the initial state is 1, others are 0'
@@ -128,7 +128,7 @@ BDD translate_formula_into_cuddBDD(const spot::formula& formula,
 }
 
 
-void Synth::compose_transition_vector() {
+void sdf::GameSolver::compose_transition_vector() {
     L_INF("compose_transition_vector..");
 
     const spot::bdd_dict_ptr& spot_bdd_dict = aut->get_dict();
@@ -162,7 +162,7 @@ void Synth::compose_transition_vector() {
 }
 
 
-vector<BDD> Synth::get_substitution() {
+vector<BDD> sdf::GameSolver::get_substitution() {
     vector<BDD> substitution;
 
     for (uint i = 0; i < (uint)cudd.ReadSize(); ++i) {
@@ -352,7 +352,7 @@ void update_order_if(Cudd& cudd, vector<VecUint >& orders)
 }
 
 
-BDD Synth::pre_sys(BDD dst) {
+BDD sdf::GameSolver::pre_sys(BDD dst) {
     /**
     Calculate predecessor states of given states.
 
@@ -425,7 +425,7 @@ BDD Synth::pre_sys(BDD dst) {
 }
 
 
-BDD Synth::calc_win_region() {
+BDD sdf::GameSolver::calc_win_region() {
     /** Calculate a winning region for the safety game: win = greatest_fix_point.X [not_error & pre_sys(X)]
         :return: BDD representing the winning region
     **/
@@ -445,7 +445,7 @@ BDD Synth::calc_win_region() {
 }
 
 
-BDD Synth::get_nondet_strategy() {
+BDD sdf::GameSolver::get_nondet_strategy() {
     /**
     Get non-deterministic strategy from the winning region.
     If the system outputs controllable values that satisfy this non-deterministic strategy,
@@ -470,7 +470,7 @@ BDD Synth::get_nondet_strategy() {
 }
 
 
-hmap<uint,BDD> Synth::extract_output_funcs() {
+hmap<uint,BDD> sdf::GameSolver::extract_output_funcs() {
     /** The result vector respects the order of the controllable variables **/
 
     L_INF("extract_output_funcs..");
@@ -549,7 +549,7 @@ void init_cudd(Cudd& cudd) {
 }
 
 
-bool Synth::run() {
+bool sdf::GameSolver::run() {
     init_cudd(cudd);
 
     // create T from the spot automaton
@@ -664,5 +664,5 @@ bool Synth::run() {
 //    MASSERT(res, "Could not write result file");
 }
 
-Synth::~Synth() {
+sdf::GameSolver::~GameSolver() {
 }

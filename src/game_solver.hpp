@@ -10,8 +10,8 @@
 
 
 #define BDD spotBDD
-#include <spot/twa/twa.hh>
-#include <spot/tl/formula.hh>
+    #include <spot/twa/twa.hh>
+    #include <spot/tl/formula.hh>
 #undef BDD
 
 
@@ -22,39 +22,41 @@ extern "C" {
 };
 
 #include <cuddObj.hh>
-#include "myassert.hpp"
-#include "Timer.hpp"
+#include "my_assert.hpp"
+#include "timer.hpp"
 
+namespace sdf
+{
 
-class Synth {
+class GameSolver
+{
 
 public:
     /// NOTE: time_limit_sec is used for heuristics (but I won't stop on reaching it)
-    Synth(bool is_moore_,
-          const std::vector<spot::formula>& inputs_,
-          const std::vector<spot::formula>& outputs_,
-          spot::twa_graph_ptr &aut_,
-          const std::string &output_file_name_,
-          unsigned time_limit_sec_=3600):
-            is_moore(is_moore_),
-            inputs(inputs_),
-            outputs(outputs_),
-            aut(aut_),
-            output_file_name(output_file_name_),
-            time_limit_sec(time_limit_sec_) {
+    GameSolver(bool is_moore_,
+               const std::vector<spot::formula> &inputs_,
+               const std::vector<spot::formula> &outputs_,
+               spot::twa_graph_ptr &aut_,
+               const std::string &output_file_name_,
+               unsigned time_limit_sec_ = 3600) :
+        is_moore(is_moore_),
+        inputs(inputs_),
+        outputs(outputs_),
+        aut(aut_),
+        output_file_name(output_file_name_),
+        time_limit_sec(time_limit_sec_)
+    {
         inputs_outputs.insert(inputs_outputs.end(), inputs.begin(), inputs.end());
         inputs_outputs.insert(inputs_outputs.end(), outputs.begin(), outputs.end());
-        NOF_SIGNALS = (uint)inputs_outputs.size();
+        NOF_SIGNALS = (uint) inputs_outputs.size();
     }
 
     bool run();  // -> returns 'is realizable'
-    ~Synth();
-
+    ~GameSolver();
 
 private:
-    Synth(const Synth &other);
-    Synth &operator=(const Synth &other);
-
+    GameSolver(const GameSolver &other);
+    GameSolver &operator=(const GameSolver &other);
 
 private:
     const bool is_moore;
@@ -67,9 +69,8 @@ private:
     const std::string output_file_name;
     const uint time_limit_sec;
 
-
 private:
-    Timer timer;
+    sdf::Timer timer;
     Cudd cudd;
 //    aiger *aiger_spec;
 
@@ -105,3 +106,6 @@ private:
 
     std::vector<BDD> get_substitution();
 };
+
+
+} // namespace sdf

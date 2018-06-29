@@ -44,7 +44,7 @@ const vector<string> real_specs =
 };
 
 
-/// @returns: the return code of the tool execution
+/// @returns: return code of the tool execution
 bool execute_tool(const string& name)
 {
     cout << name << endl;
@@ -80,6 +80,7 @@ INSTANTIATE_TEST_CASE_P(Real,
 // - just added the tools, using parameterized tests, see:
 //   https://stackoverflow.com/questions/19160244/create-tests-at-run-time-google-test
 //   https://github.com/google/googletest/blob/master/googletest/docs/advanced.md#value-parameterized-tests
+//   https://www.youtube.com/watch?v=8Up5eNZ0FLw
 /// CURRENT:
 /// - the testing code itself is not finished:
 ///   - run the tool (either via command line or directly)
