@@ -34,13 +34,11 @@ class Synth {
 
 public:
     /// NOTE: time_limit_sec is used for heuristics (I won't stop on reaching it)
-    Synth(bool is_moore_,
-          const vector<string>& inputs_,
+    Synth(const vector<string>& inputs_,
           const vector<string>& outputs_,
           spot::twa_graph_ptr &aut_,
           const string &output_file_name_,
           unsigned time_limit_sec_=3600):
-            is_moore(is_moore_),
             inputs(inputs_),
             outputs(outputs_),
             aut(aut_),
@@ -61,7 +59,6 @@ private:
 
 
 private:
-    const bool is_moore;
     const vector<string> inputs;
     const vector<string> outputs;
     vector<string> inputs_outputs;

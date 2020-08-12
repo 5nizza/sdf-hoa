@@ -415,27 +415,6 @@ BDD Synth::pre_sys(BDD dst) {
 
     dst = dst.VectorCompose(get_substitution());                                update_order_if(cudd, orders);
 
-    if (is_moore) {
-        BDD result = dst.And(~error);
-
-        vector<BDD> uncontrollable = get_uncontrollable_vars_bdds();
-        if (!uncontrollable.empty()) {
-            BDD uncontrollable_cube = cudd.bddComputeCube(uncontrollable.data(),
-                                                          nullptr,
-                                                          (int)uncontrollable.size());
-            result = result.UnivAbstract(uncontrollable_cube);                  update_order_if(cudd, orders);
-        }
-
-        // ∃c ∀u  (...)
-        vector<BDD> controllable = get_controllable_vars_bdds();
-        BDD controllable_cube = cudd.bddComputeCube(controllable.data(),
-                                                    nullptr,
-                                                    (int)controllable.size());
-        result = result.ExistAbstract(controllable_cube);                       update_order_if(cudd, orders);
-        return result;
-    }
-
-    // the case of Mealy machines
     vector<BDD> controllable = get_controllable_vars_bdds();
     BDD controllable_cube = cudd.bddComputeCube(controllable.data(),
                                                 nullptr,
