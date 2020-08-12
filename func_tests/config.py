@@ -1,2 +1,2 @@
-TOOL_EXEC="/home/ayrat/projects/sdf/my-build/src/sdf-opt"
-IIMC_EXEC="/home/ayrat/projects/iimc-2.0/iimc"
+TOOL_EXEC="/home/art/software/sdf-hoa/cmake-build-debug/src/sdf-hoa-debug"
+IIMC_EXEC="/home/art/software/iimc-2.0/iimc"

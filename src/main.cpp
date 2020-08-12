@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
 
     spot::parsed_aut_ptr pa = parse_aut(hoa_file_name, spot::make_bdd_dict());
     MASSERT(pa->format_errors(cerr) == 0, "error while reading HOA file");
-    MASSERT (pa->aborted==0, "could not read HOA file: it is terminated with 'ABORT'");
+    MASSERT(pa->aborted==0, "could not read HOA file: reading terminated with 'ABORT'");
 
     auto k_aut = k_reduce(pa->aut, k);
 
