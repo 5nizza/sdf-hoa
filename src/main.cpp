@@ -1,6 +1,5 @@
 #include <fstream>
 #include <iostream>
-#include <sstream>
 #include <string>
 
 #include <spdlog/spdlog.h>
@@ -11,7 +10,6 @@
 
 #define BDD spotBDD
 #include <spot/parseaut/public.hh>
-#include <spot/twaalgos/hoa.hh>
 #include <spot/twa/bddprint.hh>
 #undef BDD
 
