@@ -31,7 +31,7 @@ def is_realizable(test_file:str):
 
 
 def run_sdf(test_file, signals_file, result_file, tool_args:str):
-    cmd_run = f'{TOOL_EXEC} {test_file} -p {signals_file} -o {result_file} {tool_args}'
+    cmd_run = f'{TOOL_EXEC} {test_file} {signals_file} -o {result_file} {tool_args}'
     logger.debug('executing: ' + cmd_run)
     return execute_shell(cmd_run)
 
@@ -88,7 +88,8 @@ def check_answer_with_mc(test_file, result_file, rc, out, err):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Functional tests runner (Note: I run sdf-hoa with \'-k 4\')')
+    parser = argparse.ArgumentParser(description=
+                                     'Functional tests runner (Note: I run sdf-hoa with default value for \'-k\')')
 
     parser.add_argument('--mc',
                         action='store_true',
@@ -116,7 +117,7 @@ if __name__ == "__main__":
                              lambda test_file, result_file: run_sdf(test_file,
                                                                     test_file[:test_file.rfind(".hoa")]+".part",
                                                                     result_file,
-                                                                    args.args + ' -k 4'),
+                                                                    args.args),
                              [check_answer, check_answer_with_mc][args.mc],
                              True,
                              logger)
