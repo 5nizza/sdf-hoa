@@ -44,7 +44,6 @@ int main(int argc, const char *argv[]) {
                                 "(default:8)",
                                 {'k'},
                                 8);
-    args::Flag is_moore_flag(parser, "moore", "synthesize Moore machines (by default I synthesize Mealy)", {"moore"});
     args::Flag verbose_flag(parser, "v", "verbose mode (the default is silent)", {'v'});
 
     args::ValueFlag<string> output_name(parser,
@@ -81,13 +80,11 @@ int main(int argc, const char *argv[]) {
     string signals_file_name(signals_arg.Get());
     string output_file_name(output_name ? output_name.Get() : "stdout");
     uint k(k_arg.Get());
-    bool is_moore(is_moore_flag? true:false);
 
     spdlog::get("console")->info()
             << "hoa_file: " << hoa_file_name << ", "
             << "signals_file: " << signals_file_name << ", "
             << "k: " << k << ", "
-            << "is_moore: " << is_moore << ", "
             << "output_file: " << output_file_name;
 
     std::ifstream signals_file(signals_file_name);
