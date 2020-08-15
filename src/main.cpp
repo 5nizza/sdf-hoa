@@ -20,12 +20,12 @@ using namespace std;
 vector<string> tokenize_line(uint nof_tokens_to_skip, const string& line);
 
 
-void _assert_do_not_intersect(vector<string> inputs, vector <string> outputs);
+void assert_do_not_intersect(vector<string> inputs, vector <string> outputs);
 
 void print_usage_exit() {
     cout << endl
-         << "<tool>  <hoa_file> -s <inputs_outputs_file> -k <k> [-o] [-v] [-h]" << endl << endl
-         << "-s      part file with two lines (example: first line: `.inputs i1 i2`, second line: `.outputs o1 o2`)" << endl
+         << "<tool>  <hoa_file> -p <inputs_outputs_file> -k <k> [-o] [-v] [-h]" << endl << endl
+         << "-p      part file with two lines (example: first line: `.inputs i1 i2`, second line: `.outputs o1 o2`)" << endl
          << "-k      the maximum number of times the same bad state can be visited (thus, it is reset between SCCs)" << endl
          << "-o      output file for a model (not yet supported)" << endl
          << "-v      verbose output (default silent)" << endl
@@ -36,7 +36,7 @@ void print_usage_exit() {
 
 int main(int argc, char *argv[]) {
     ArgsParser parser(argc, argv, 2);
-    if (parser.cmdOptionExists("-h") || argc < 5 || !parser.cmdOptionExists("-s") || !parser.cmdOptionExists("-k"))
+    if (parser.cmdOptionExists("-h") || argc < 5 || !parser.cmdOptionExists("-p") || !parser.cmdOptionExists("-k"))
         print_usage_exit();
 
     // setup logging
@@ -47,7 +47,7 @@ int main(int argc, char *argv[]) {
 
     // parse args
     auto hoa_file_name = string(argv[1]);
-    auto signals_file_name = parser.getCmdOption("-s");
+    auto signals_file_name = parser.getCmdOption("-p");
     auto output_file_name = parser.cmdOptionExists("-o") ? parser.getCmdOption("-o") : string("stdout");
     auto _k = stoi(parser.getCmdOption("-k"));
     MASSERT(_k>=0, "k must be >= 0: " << _k);
@@ -68,7 +68,7 @@ int main(int argc, char *argv[]) {
     vector<string> inputs = tokenize_line(1, line_inputs);
     vector<string> outputs = tokenize_line(1, line_outputs);
     MASSERT(!outputs.empty(), "outputs are empty");
-    _assert_do_not_intersect(inputs, outputs);
+    assert_do_not_intersect(inputs, outputs);
 
     spot::parsed_aut_ptr pa = parse_aut(hoa_file_name, spot::make_bdd_dict());
     MASSERT(pa->format_errors(cerr) == 0, "error while reading HOA file");
@@ -83,7 +83,7 @@ int main(int argc, char *argv[]) {
 }
 
 
-void _assert_do_not_intersect(vector<string> inputs, vector <string> outputs) {
+void assert_do_not_intersect(vector<string> inputs, vector <string> outputs) {
 
     sort(inputs.begin(), inputs.end());
     sort(outputs.begin(), outputs.end());
