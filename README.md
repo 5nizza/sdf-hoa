@@ -18,6 +18,7 @@ Dependencies:
 - cudd-3.0.0
 - spot-2.5.3
 - spdlog
+- [args](https://github.com/Taywee/args): it should be placed into `third_party` folder (see `CMakeLists.txt`)
 
 To build, install dependencies into folder `third_parties`.
 Then:
