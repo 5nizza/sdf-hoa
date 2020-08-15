@@ -26,7 +26,7 @@ void assert_do_not_intersect(vector<string> inputs, vector <string> outputs);
 
 
 int main(int argc, const char *argv[]) {
-    args::ArgumentParser parser("Synthesizer from finite automata (universal co-reachability)");
+    args::ArgumentParser parser("Synthesizer from UCW automata specs");
     parser.helpParams.width = 100;
     parser.helpParams.helpindent = 26;
 
