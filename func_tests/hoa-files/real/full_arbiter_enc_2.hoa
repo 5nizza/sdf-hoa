@@ -1,0 +1,46 @@
+HOA: v1
+States: 11
+Start: 0
+AP: 3 "grant_1" "request_0" "grant_0"
+acc-name: Buchi
+Acceptance: 1 Inf(0)
+properties: trans-labels explicit-labels state-acc
+--BODY--
+State: 0
+[0&1] 1
+[0&!1] 2
+[0&!2] 3
+[0] 4
+[0&!1] 5
+[0&2] 6
+[0&1] 7
+[!0] 8
+State: 1 {0}
+[0 | !2] 1
+State: 2
+[0&!1 | !1&!2] 2
+[!0&2] 8
+State: 3 {0}
+[2] 6
+State: 4
+[0&1 | 1&!2] 1
+[!2] 3
+[t] 4
+[0&!1 | !1&2] 5
+[2] 6
+[!0&!2] 9
+[!0&2] 10
+State: 5 {0}
+[0 | 2] 5
+State: 6 {0}
+[!2] 3
+State: 7
+[0&1 | 1&2] 7
+[!0&!2] 8
+State: 8 {0}
+[t] 8
+State: 9
+[0&1 | 1&2] 7
+State: 10
+[0&!1 | !1&!2] 2
+--END--

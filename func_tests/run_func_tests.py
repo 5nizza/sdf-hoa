@@ -21,22 +21,23 @@ except ImportError:
     exit(-1)
 
 
-def is_realizable(test):
-    spec_status = cat(test)[-1].strip()
-    if spec_status == 'realizable':
-        return True
-    if spec_status == 'unrealizable':
-        return False
-    assert 0, 'spec status is unknown'
+def is_realizable(test_file:str):
+    # The absolute_file_path structure is:
+    # <something>/real/file_name.hoa
+    # <something>/unreal/file_name.hoa
+    status = test_file.split('/')[-2]
+    assert status in ['real', 'unreal'], 'spec status is unknown: ' + status
+    return status == 'real'
 
 
-def run_tool(test_file, result_file, tool_args:str):
-    cmd_run = TOOL_EXEC + ' ' + test_file + ' -o ' + result_file + ' ' + tool_args
+def run_sdf(test_file, signals_file, result_file, tool_args:str):
+    cmd_run = f'{TOOL_EXEC} {test_file} -p {signals_file} -o {result_file} {tool_args}'
     logger.debug('executing: ' + cmd_run)
     return execute_shell(cmd_run)
 
 
-def check_answer(test_file:str, result_file, rc, out, err):
+# noinspection PyUnusedLocal
+def check_answer(test_file:str, result_file:str, rc, out, err):
     exit_status_realizable = 10
     exit_status_unrealizable = 20
     assert rc in [exit_status_realizable, exit_status_unrealizable], rc_out_err_to_str(rc, out, err)
@@ -46,9 +47,8 @@ def check_answer(test_file:str, result_file, rc, out, err):
     if rc != expected:
         status_to_str = {exit_status_realizable: 'realizable',
                          exit_status_unrealizable: 'unrealizable'}
-        out = 'wrong realizability status: should be {expected}, but the tool found it {res}'.format(
-            expected=status_to_str[expected],
-            res=status_to_str[rc])
+        out = f'wrong realizability status: should be {status_to_str[expected]},' \
+              f'but the tool found it {status_to_str[rc]}'
         return 1, out, None
 
     return 0, None, None
@@ -56,8 +56,7 @@ def check_answer(test_file:str, result_file, rc, out, err):
 
 def model_check(file_to_check) -> bool:
     # Below 'pi' specifies the property to model check
-    cmd = "{IIMC} {file} --pi 0".format(IIMC=IIMC_EXEC,
-                                        file=file_to_check)
+    cmd = f'{IIMC_EXEC} {file_to_check} --pi 0'
     logger.debug('executing ' + cmd)
     rc, out, err = execute_shell(cmd)
     assert rc == 0, rc_out_err_to_str(rc, out, err)
@@ -89,7 +88,7 @@ def check_answer_with_mc(test_file, result_file, rc, out, err):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Functional tests runner')
+    parser = argparse.ArgumentParser(description='Functional tests runner (Note: I run sdf-hoa with \'-k 4\')')
 
     parser.add_argument('--mc',
                         action='store_true',
@@ -108,12 +107,16 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     tests_dir = os.path.dirname(os.path.abspath(__file__))
-    test_files = find_files(tests_dir + '/aag-files/', extension='aag')
+    test_files = find_files(f'{tests_dir}/hoa-files/real/', extension='hoa') +\
+                 find_files(f'{tests_dir}/hoa-files/unreal/', extension='hoa')
 
     logger = setup_logging(args.verbose)
 
     failed_tests = run_tests(test_files,
-                             lambda test_file, result_file: run_tool(test_file, result_file, args.args),
+                             lambda test_file, result_file: run_sdf(test_file,
+                                                                    test_file[:test_file.rfind(".hoa")]+".part",
+                                                                    result_file,
+                                                                    args.args + ' -k 4'),
                              [check_answer, check_answer_with_mc][args.mc],
                              True,
                              logger)

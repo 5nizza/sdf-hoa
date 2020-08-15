@@ -1,0 +1,2 @@
+.inputs r1 r2 r0
+.outputs a0 a2 a1

@@ -3,8 +3,10 @@ import shlex
 import subprocess
 from tempfile import mkstemp, mkdtemp
 
+from typing import List
 
-def find_files(directory:str, extension:str= '', ignore_mark=None):
+
+def find_files(directory:str, extension:str='', ignore_mark=None) -> List[str]:
     """
     Walk recursively :arg directory,
       ignoring dirs that contain file named :arg ignore_mark,
