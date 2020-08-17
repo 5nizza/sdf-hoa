@@ -22,6 +22,7 @@ struct SpecParam
 };
 
 
+///TODO: fix this warning: see how to: https://github.com/google/googletest/blob/master/googletest/docs/advanced.md
 const vector<SpecParam> specs =
 {
     SpecParam("round_robin_arbiter_unreal1.tlsf", false),
@@ -50,13 +51,6 @@ const vector<SpecParam> specs =
 };
 
 
-/// @returns: return_code of the tool execution
-int execute_tool(const string& name, bool do_unreal_check, uint k)
-{
-    return sdf::run("./specs/" + name, do_unreal_check, {k}, "");
-}
-
-
 class TestSpec : public ::testing::TestWithParam<SpecParam> { };
 
 
@@ -64,12 +58,14 @@ TEST_P(TestSpec, check_unreal)
 {
     auto spec = GetParam();
 
-    auto status = execute_tool(spec.name, true, 4);
+    auto status = sdf::run("./specs/" + spec.name,
+                           true,
+                           {4},
+                           "");
 
     if (spec.is_real)
         EXPECT_EQ(SYNTCOMP_RC_UNKNOWN, status);
-
-    if (!spec.is_real)
+    else
         EXPECT_EQ(SYNTCOMP_RC_UNREAL, status);
 }
 
@@ -78,19 +74,21 @@ TEST_P(TestSpec, check_real)
 {
     auto spec = GetParam();
 
-    auto status = execute_tool(spec.name, false, 4);
+    auto status = sdf::run("./specs/" + spec.name,
+                           false,
+                           {4},
+                           "");
 
     if (spec.is_real)
         EXPECT_EQ(SYNTCOMP_RC_REAL, status);
-
-    if (!spec.is_real)
+    else
         EXPECT_EQ(SYNTCOMP_RC_UNKNOWN, status);
 }
 
 
-INSTANTIATE_TEST_CASE_P(RealAndUnreal,
-                        TestSpec,
-                        ::testing::ValuesIn(specs));
+INSTANTIATE_TEST_SUITE_P(RealAndUnreal,
+                         TestSpec,
+                         ::testing::ValuesIn(specs));
 
 
 /// For future: good to check the exact values of parameter k that makes specs realizable.
