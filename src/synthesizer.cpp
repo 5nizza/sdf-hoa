@@ -38,10 +38,6 @@ int sdf::run(const std::string &tlsf_file_name,
     set<spot::formula> inputs, outputs;
     bool is_moore;
     tie(formula, inputs, outputs, is_moore) = parse_tlsf(tlsf_file_name);
-    for (auto e: inputs)
-    {
-        spdlog::get("console")->info() << "input e: " << e << "\n";
-    }
 
     spdlog::get("console")->info() << "\n"
                                    << "tlsf: " << tlsf_file_name << "\n"
@@ -53,21 +49,14 @@ int sdf::run(const std::string &tlsf_file_name,
 
     bool game_is_real;
     if (check_unreal)
-    {
         // we use dualized the spec
         game_is_real = check_real_formula(spot::formula::Not(formula),
                                           outputs, inputs,
                                           k_to_iterate, !is_moore, output_file_name);
-        spdlog::get("console")->info() << "checking unreal, status: " << game_is_real;
-    }
     else
-    {
         game_is_real = check_real_formula(formula,
                                           inputs, outputs,
                                           k_to_iterate, is_moore, output_file_name);
-
-        spdlog::get("console")->info() << "checking real, status: " << game_is_real;
-    }
 
     if (!game_is_real)
     {   // game is won by Adam, but it does not mean the spec is unreal (due to k-reduction)
