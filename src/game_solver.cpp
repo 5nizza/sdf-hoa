@@ -34,9 +34,11 @@ typedef vector<uint> VecUint;
 typedef unordered_set<uint> SetUint;
 
 
-vector<BDD> sdf::GameSolver::get_controllable_vars_bdds() {
+vector<BDD> sdf::GameSolver::get_controllable_vars_bdds()
+{
     vector<BDD> result;
-    for (ulong i = inputs.size(); i < inputs_outputs.size(); ++i) {
+    for (ulong i = inputs.size(); i < inputs_outputs.size(); ++i)
+    {
         BDD var_bdd = cudd.bddVar(static_cast<int>(i));
         result.push_back(var_bdd);
     }
@@ -44,9 +46,11 @@ vector<BDD> sdf::GameSolver::get_controllable_vars_bdds() {
 }
 
 
-vector<BDD> sdf::GameSolver::get_uncontrollable_vars_bdds() {
+vector<BDD> sdf::GameSolver::get_uncontrollable_vars_bdds()
+{
     vector<BDD> result;
-    for (uint i = 0; i < inputs.size(); ++i) {
+    for (uint i = 0; i < inputs.size(); ++i)
+    {
         BDD var_bdd = cudd.bddVar(i);
         result.push_back(var_bdd);
     }
@@ -54,7 +58,8 @@ vector<BDD> sdf::GameSolver::get_uncontrollable_vars_bdds() {
 }
 
 
-void sdf::GameSolver::introduce_error_bdd() {
+void sdf::GameSolver::introduce_error_bdd()
+{
     // Error BDD is true on reaching any of the accepting states.
     // Assumptions:
     // - acceptance is state-based,
@@ -71,7 +76,8 @@ void sdf::GameSolver::introduce_error_bdd() {
 }
 
 
-void sdf::GameSolver::compose_init_state_bdd() {
+void sdf::GameSolver::compose_init_state_bdd()
+{
     L_INF("compose_init_state_bdd..");
 
     // Initial state is 'the latch of the initial state is 1, others are 0'
@@ -86,7 +92,8 @@ void sdf::GameSolver::compose_init_state_bdd() {
 
 BDD bdd_from_p_name(const spot::formula& p,
                     const vector<spot::formula>& inputs_outputs,
-                    Cudd& cudd) {
+                    Cudd& cudd)
+{
     long idx = distance(inputs_outputs.begin(),
                         find(inputs_outputs.begin(), inputs_outputs.end(), p));
     MASSERT(idx < (long) inputs_outputs.size(), "idx is out of range for proposition: " << p);
@@ -97,16 +104,19 @@ BDD bdd_from_p_name(const spot::formula& p,
 
 BDD translate_formula_into_cuddBDD(const spot::formula& formula,
                                    vector<spot::formula>& inputs_outputs,
-                                   Cudd& cudd) {
+                                   Cudd& cudd)
+{
     // formula is the sum of products (i.e., in DNF)
-    if (formula.is(spot::op::Or)) {
+    if (formula.is(spot::op::Or))
+    {
         BDD cudd_bdd = cudd.bddZero();
         for (auto l: formula)
             cudd_bdd |= translate_formula_into_cuddBDD(l, inputs_outputs, cudd);
         return cudd_bdd;
     }
 
-    if (formula.is(spot::op::And)) {
+    if (formula.is(spot::op::And))
+    {
         BDD cudd_bdd = cudd.bddOne();
         for (auto l: formula)
             cudd_bdd &= translate_formula_into_cuddBDD(l, inputs_outputs, cudd);
@@ -116,7 +126,8 @@ BDD translate_formula_into_cuddBDD(const spot::formula& formula,
     if (formula.is(spot::op::ap))
         return bdd_from_p_name(formula, inputs_outputs, cudd);
 
-    if (formula.is(spot::op::Not)) {
+    if (formula.is(spot::op::Not))
+    {
         MASSERT(formula[0].is(spot::op::ap), formula);
         return ~bdd_from_p_name(formula[0], inputs_outputs, cudd);
     }
@@ -128,7 +139,8 @@ BDD translate_formula_into_cuddBDD(const spot::formula& formula,
 }
 
 
-void sdf::GameSolver::compose_transition_vector() {
+void sdf::GameSolver::compose_transition_vector()
+{
     L_INF("compose_transition_vector..");
 
     const spot::bdd_dict_ptr& spot_bdd_dict = aut->get_dict();
@@ -144,12 +156,13 @@ void sdf::GameSolver::compose_transition_vector() {
                 in_edges_by_state[s].push_back(t);
 
     // States are numbered from 0 to n-1.
-    for (uint s = 0; s < aut->num_states(); ++s) {
+    for (uint s = 0; s < aut->num_states(); ++s)
+    {
         L_INF("Processing state " << s << ":");
 
         BDD s_transitions = cudd.bddZero();
-        for (auto &t: in_edges_by_state[s]) {
-            // t has src, dst, cond, acc
+        for (auto &t: in_edges_by_state[s])
+        {   // t has src, dst, cond, acc
             L_INF("  edge: " << t.src << " -> " << t.dst << ": " << spot::bdd_to_formula(t.cond, spot_bdd_dict) << ": " << t.acc);
 
             BDD s_t = cudd.bddVar(t.src + NOF_SIGNALS)
@@ -162,10 +175,12 @@ void sdf::GameSolver::compose_transition_vector() {
 }
 
 
-vector<BDD> sdf::GameSolver::get_substitution() {
+vector<BDD> sdf::GameSolver::get_substitution()
+{
     vector<BDD> substitution;
 
-    for (uint i = 0; i < (uint)cudd.ReadSize(); ++i) {
+    for (uint i = 0; i < (uint)cudd.ReadSize(); ++i)
+    {
         if (i >= inputs_outputs.size()) // is state variable
             substitution.push_back(transition_func.find(i - (uint)inputs_outputs.size())->second);
         else
@@ -176,31 +191,37 @@ vector<BDD> sdf::GameSolver::get_substitution() {
 }
 
 
-vector<string> &split(const string &s, char delim, vector<string> &elems) {
+vector<string> &split(const string &s, char delim, vector<string> &elems)
+{
     stringstream ss(s);
     string item;
-    while (getline(ss, item, delim)) {
+    while (getline(ss, item, delim))
         elems.push_back(item);
-    }
+
     return elems;
 }
 
-vector<string> split(const string &s, char delim) {
+
+vector<string> split(const string &s, char delim)
+{
     vector<string> elems;
     split(s, delim, elems);
     return elems;
 }
-VecUint get_order(Cudd &cudd) {
+
+
+VecUint get_order(Cudd &cudd)
+{
     string order_str = cudd.OrderString();
     auto str_vars = split(order_str, ' ');                                MASSERT(str_vars.size() == (uint) cudd.ReadSize(), "");
     VecUint order;
-    for (auto const & str_v : str_vars) {
+    for (auto const & str_v : str_vars)
         order.push_back((uint) stoi(str_v.substr(1)));
-    }
     return order;
 }
 
-string string_set(const SetUint& v) {
+string string_set(const SetUint& v)
+{
     stringstream ss;
     for(auto const el : v)
         ss << el << ",";
@@ -208,8 +229,10 @@ string string_set(const SetUint& v) {
 }
 
 template<typename Container>
-struct container_hash {
-    std::size_t operator()(Container const & v) const {
+struct container_hash
+{
+    std::size_t operator()(Container const & v) const
+    {
         size_t hash = 0;
         for (auto const el: v)
             hash ^= el;
@@ -218,7 +241,8 @@ struct container_hash {
 };
 
 
-bool do_intersect(const SetUint& s1, const SetUint& s2) {
+bool do_intersect(const SetUint& s1, const SetUint& s2)
+{
     for (auto el1 : s1)
         if (s2.find(el1) != s2.end())
             return true;
@@ -233,8 +257,10 @@ get_group_candidates(const vector<VecUint >& orders,
     hmap<SetUint, uint, container_hash<SetUint>>
             group_freq;
 
-    for (auto const & order : orders) {
-        for (uint idx=0; idx < order.size() - window_size; ++idx) {
+    for (auto const & order : orders)
+    {
+        for (uint idx=0; idx < order.size() - window_size; ++idx)
+        {
             SetUint sub_group(order.begin() + idx,
                               order.begin() + idx + window_size);
             ++group_freq[sub_group];
@@ -242,10 +268,9 @@ get_group_candidates(const vector<VecUint >& orders,
     }
 
     vector<SetUint> candidates;
-    for (auto const & it: group_freq) {
+    for (auto const & it: group_freq)
         if (((float)it.second/orders.size()) >= 0.8)  // appears 'often'
             candidates.push_back(it.first);
-    }
     return candidates;
 }
 
@@ -254,12 +279,11 @@ void remove_intersecting(SetUint group,
                          vector<SetUint> &groups)
 {
     vector<SetUint>::iterator it = groups.begin();
-    while (it != groups.end()) {
+    while (it != groups.end())
         if (do_intersect(group, *it))
             it = groups.erase(it);
         else
             ++it;
-    }
 }
 
 
@@ -293,15 +317,16 @@ void _do_grouping(Cudd &cudd,
 
     auto cur_groups = groups_by_length[cur_group_length];
 
-    for (uint i = 0; i+cur_group_length < cur_order.size(); ++i) {
+    for (uint i = 0; i+cur_group_length < cur_order.size(); ++i)
+    {
         SetUint candidate;
         for (uint j = 0; j < cur_group_length; ++j)
             candidate.insert(cur_order[i+j]);
 
-        if (find(cur_groups.begin(), cur_groups.end(), candidate) != cur_groups.end()) {
-            for (uint l = 2; l < cur_group_length; ++l) {
+        if (find(cur_groups.begin(), cur_groups.end(), candidate) != cur_groups.end())
+        {
+            for (uint l = 2; l < cur_group_length; ++l)
                 remove_intersecting(candidate, groups_by_length[l]);  //remove from smaller groups
-            }
             introduce_group_into_cudd(cudd, candidate);
         }
     }
@@ -323,13 +348,13 @@ void do_grouping(Cudd& cudd,
     groups_by_length[5] = get_group_candidates(orders, 5);
 
     L_INF("# of group candidates: of size 2 -- " << groups_by_length[2].size());
-    for (auto const& g : groups_by_length[2]) {
+    for (auto const& g : groups_by_length[2])
         L_INF(string_set(g));
-    }
+
     L_INF("# of group candidates: of size 3 -- " << groups_by_length[3].size());
-    for (auto const& g : groups_by_length[3]) {
+    for (auto const& g : groups_by_length[3])
         L_INF(string_set(g));
-    }
+
     L_INF("# of group candidates: of size 4 -- " << groups_by_length[4].size());
     L_INF("# of group candidates: of size 5 -- " << groups_by_length[5].size());
 
@@ -379,18 +404,21 @@ BDD sdf::GameSolver::pre_sys(BDD dst) {
     static vector<VecUint> orders;
     static bool did_grouping = false;
 
-    if (!did_grouping && timer.sec_from_origin() > time_limit_sec/4) { // at 0.25*time_limit we fix the order
+    if (!did_grouping && timer.sec_from_origin() > time_limit_sec/4)
+    {   // at 0.25*time_limit we fix the order
         do_grouping(cudd, orders);
         did_grouping = true;
     }
 
     dst = dst.VectorCompose(get_substitution());                                update_order_if(cudd, orders);
 
-    if (is_moore) {
+    if (is_moore)
+    {
         BDD result = dst.And(~error);
 
         vector<BDD> uncontrollable = get_uncontrollable_vars_bdds();
-        if (!uncontrollable.empty()) {
+        if (!uncontrollable.empty())
+        {
             BDD uncontrollable_cube = cudd.bddComputeCube(uncontrollable.data(),
                                                           nullptr,
                                                           (int)uncontrollable.size());
@@ -414,7 +442,8 @@ BDD sdf::GameSolver::pre_sys(BDD dst) {
     BDD result = dst.AndAbstract(~error, controllable_cube);                   update_order_if(cudd, orders);
 
     vector<BDD> uncontrollable = get_uncontrollable_vars_bdds();
-    if (!uncontrollable.empty()) {
+    if (!uncontrollable.empty())
+    {
         // ∀u ∃c (...)
         BDD uncontrollable_cube = cudd.bddComputeCube(uncontrollable.data(),
                                                       nullptr,
@@ -425,13 +454,15 @@ BDD sdf::GameSolver::pre_sys(BDD dst) {
 }
 
 
-BDD sdf::GameSolver::calc_win_region() {
+BDD sdf::GameSolver::calc_win_region()
+{
     /** Calculate a winning region for the safety game: win = greatest_fix_point.X [not_error & pre_sys(X)]
         :return: BDD representing the winning region
     **/
 
     BDD new_ = cudd.bddOne();
-    for (uint i = 1; ; ++i) {                                                  L_INF("calc_win_region: iteration " << i << ": node count " << cudd.ReadNodeCount());
+    for (uint i = 1; ; ++i)
+    {                                                  L_INF("calc_win_region: iteration " << i << ": node count " << cudd.ReadNodeCount());
         BDD curr = new_;
 
         new_ = pre_sys(curr);
@@ -445,7 +476,8 @@ BDD sdf::GameSolver::calc_win_region() {
 }
 
 
-BDD sdf::GameSolver::get_nondet_strategy() {
+BDD sdf::GameSolver::get_nondet_strategy()
+{
     /**
     Get non-deterministic strategy from the winning region.
     If the system outputs controllable values that satisfy this non-deterministic strategy,
@@ -470,7 +502,8 @@ BDD sdf::GameSolver::get_nondet_strategy() {
 }
 
 
-hmap<uint,BDD> sdf::GameSolver::extract_output_funcs() {
+hmap<uint,BDD> sdf::GameSolver::extract_output_funcs()
+{
     /** The result vector respects the order of the controllable variables **/
 
     L_INF("extract_output_funcs..");
@@ -481,20 +514,21 @@ hmap<uint,BDD> sdf::GameSolver::extract_output_funcs() {
 
     vector<BDD> controls = get_controllable_vars_bdds();
 
-    while (!controls.empty()) {
+    while (!controls.empty())
+    {
         BDD c = controls.back(); controls.pop_back();
 
 //        aiger_symbol *aiger_input = aiger_is_input(aiger_spec, aiger_by_cudd[c.NodeReadIndex()]);
 //        L_INF("getting output function for " << aiger_input->name);
 
         BDD c_arena;
-        if (!controls.empty()) {
+        if (!controls.empty())
+        {
             BDD cube = cudd.bddComputeCube(controls.data(), nullptr, (int)controls.size());
             c_arena = non_det_strategy.ExistAbstract(cube);
         }
-        else { //no other signals left
+        else //no other signals left
             c_arena = non_det_strategy;
-        }
         // Now we have: c_arena(t,u,c) = ∃c_others: nondet(t,u,c)
         // (i.e., c_arena talks about this particular c, about t and u)
 
@@ -507,12 +541,14 @@ hmap<uint,BDD> sdf::GameSolver::extract_output_funcs() {
         // since the negation can cause including tuples (t,i,o) that violate non_det_strategy.
 
         auto support_indices = cudd.SupportIndices(vector<BDD>({c_must_be_false, c_must_be_true}));
-        for (auto const var_cudd_idx : support_indices) {
+        for (auto const var_cudd_idx : support_indices)
+        {
             auto v = cudd.ReadVars(var_cudd_idx);
             auto new_c_must_be_false = c_must_be_false.ExistAbstract(v);
             auto new_c_must_be_true = c_must_be_true.ExistAbstract(v);
 
-            if ((new_c_must_be_false & new_c_must_be_true) == cudd.bddZero()) {
+            if ((new_c_must_be_false & new_c_must_be_true) == cudd.bddZero())
+            {
                 c_must_be_false = new_c_must_be_false;
                 c_must_be_true = new_c_must_be_true;
             }
@@ -533,7 +569,8 @@ hmap<uint,BDD> sdf::GameSolver::extract_output_funcs() {
         //killing node refs
         c_must_be_false = c_must_be_true = c_can_be_false = c_can_be_true = c_arena = cudd.bddZero();
 
-        //TODO: ak: strange -- the python version for the example amba_02_9n produces a smaller circuit (~5-10 times)!
+        /// TODO: ak: strange -- the python version for the example amba_02_9n produces a smaller circuit (~5-10 times)!
+        /// (maybe it is due to the bug with order? See https://github.com/5nizza/sdf-hoa/issues/1)
         non_det_strategy = non_det_strategy.Compose(c_model, c.NodeReadIndex());
         //non_det_strategy = non_det_strategy & ((c & c_model) | (~c & ~c_model));
     }
@@ -542,14 +579,16 @@ hmap<uint,BDD> sdf::GameSolver::extract_output_funcs() {
 }
 
 
-void init_cudd(Cudd& cudd) {
+void init_cudd(Cudd& cudd)
+{
 //    cudd.Srandom(827464282);  // for reproducibility (?)
     cudd.AutodynEnable(CUDD_REORDER_SIFT);
 //    cudd.EnableReorderingReporting();
 }
 
 
-bool sdf::GameSolver::run() {
+bool sdf::GameSolver::check_realizability()
+{
     init_cudd(cudd);
 
     // create T from the spot automaton
@@ -572,7 +611,7 @@ bool sdf::GameSolver::run() {
     win_region = calc_win_region();
     L_INF("calc_win_region took (sec): " << timer.sec_restart());
 
-    return win_region.IsZero() ? false : true;
+    return !win_region.IsZero();
 
     // solve the game
     // output the result
@@ -664,5 +703,12 @@ bool sdf::GameSolver::run() {
 //    MASSERT(res, "Could not write result file");
 }
 
-sdf::GameSolver::~GameSolver() {
+bool sdf::GameSolver::synthesize()
+{
+    return false;
 }
+
+sdf::GameSolver::~GameSolver()
+{
+}
+

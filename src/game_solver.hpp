@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <utility>
 #include <vector>
 #include <string>
 #include <unordered_map>
@@ -34,24 +35,33 @@ class GameSolver
 public:
     /// NOTE: time_limit_sec is used for heuristics (but I won't stop on reaching it)
     GameSolver(bool is_moore_,
-               const std::vector<spot::formula> &inputs_,
-               const std::vector<spot::formula> &outputs_,
-               spot::twa_graph_ptr &aut_,
-               const std::string &output_file_name_,
+               const std::set<spot::formula>& inputs_,
+               const std::set<spot::formula>& outputs_,
+               spot::twa_graph_ptr& aut_,
+               std::string output_file_name_,
                unsigned time_limit_sec_ = 3600) :
         is_moore(is_moore_),
-        inputs(inputs_),
-        outputs(outputs_),
+        inputs(inputs_.begin(), inputs_.end()),
+        outputs(outputs_.begin(), outputs_.end()),
+        NOF_SIGNALS(inputs.size()+outputs.size()),
         aut(aut_),
-        output_file_name(output_file_name_),
+        output_file_name(std::move(output_file_name_)),
         time_limit_sec(time_limit_sec_)
     {
         inputs_outputs.insert(inputs_outputs.end(), inputs.begin(), inputs.end());
         inputs_outputs.insert(inputs_outputs.end(), outputs.begin(), outputs.end());
-        NOF_SIGNALS = (uint) inputs_outputs.size();
     }
 
-    bool run();  // -> returns 'is realizable'
+    /**
+     * @return true iff the game realizable
+     * (Supposed to be called only once.)
+     */
+    bool check_realizability();
+    /**
+     * @return true iff the game is realizable
+     * (Supposed to be called only once.)
+     */
+    bool synthesize();
     ~GameSolver();
 
 private:
@@ -60,11 +70,11 @@ private:
 
 private:
     const bool is_moore;
-    const std::vector<spot::formula> inputs;
-    const std::vector<spot::formula> outputs;
-    std::vector<spot::formula> inputs_outputs;
-    uint NOF_SIGNALS;
-    spot::twa_graph_ptr aut;
+    const std::vector<spot::formula> inputs;  // we use vector instead of set bcz we need ordered variables
+    const std::vector<spot::formula> outputs; // (ordered)
+    /*const*/ std::vector<spot::formula> inputs_outputs; // (ordered)
+    const uint NOF_SIGNALS;
+    spot::twa_graph_ptr aut; // TODO: make const
 
     const std::string output_file_name;
     const uint time_limit_sec;

@@ -3,6 +3,7 @@
 //
 #pragma once
 
+#include <set>
 #include <spdlog/spdlog.h>
 
 #define BDD spotBDD
@@ -27,24 +28,24 @@ int run(const std::string& tlsf_file_name,
         const std::string& output_file_name);
 
 /**
- * @return is_realizable
+ * @return `true` iff after k-reduction the automaton is realizable
  */
 bool check_real_atm(spot::twa_graph_ptr ucw_aut,
                     uint k,
                     bool is_moore,
-                    const std::vector<spot::formula> &inputs,
-                    const std::vector<spot::formula> &outputs,
+                    const std::set<spot::formula>& inputs,
+                    const std::set<spot::formula>& outputs,
                     const std::string &output_file_name);
 
 /**
- * @return is_realizable
+ * @return `true` iff a given formula is realizable using `k_to_iterate`
  */
-bool check_real_formula(const spot::formula &formula,
-                        const std::vector<spot::formula> &inputs,
-                        const std::vector<spot::formula> &outputs,
-                        const std::vector<uint> &k_to_iterate,
+bool check_real_formula(const spot::formula& formula,
+                        const std::set<spot::formula>& inputs,
+                        const std::set<spot::formula>& outputs,
+                        const std::vector<uint>& k_to_iterate,
                         bool is_moore,
-                        const std::string &output_file_name);
+                        const std::string& output_file_name);
 
 
 } //namespace sdf

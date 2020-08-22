@@ -35,32 +35,47 @@ int sdf::run(const std::string &tlsf_file_name,
              const std::string &output_file_name)
 {
     spot::formula formula;
-    vector<spot::formula> inputs, outputs;
+    set<spot::formula> inputs, outputs;
     bool is_moore;
     tie(formula, inputs, outputs, is_moore) = parse_tlsf(tlsf_file_name);
+    for (auto e: inputs)
+    {
+        spdlog::get("console")->info() << "input e: " << e << "\n";
+    }
 
     spdlog::get("console")->info() << "\n"
+                                   << "tlsf: " << tlsf_file_name << "\n"
                                    << "formula: " << formula << "\n"
                                    << "inputs: " << join(", ", inputs) << "\n"
                                    << "outputs: " << join(", ", outputs) << "\n"
                                    << "is_moore " << is_moore;
     spdlog::get("console")->info() << "checking " << (check_unreal ? "UN" : "") << "realizability";
 
-    bool check_status;
+    bool game_is_real;
     if (check_unreal)
-        // dualize the spec
-        check_status =
-            check_real_formula(spot::formula::Not(formula), outputs, inputs, k_to_iterate, !is_moore, output_file_name);
-    else
-        check_status = check_real_formula(formula, inputs, outputs, k_to_iterate, is_moore, output_file_name);
-
-    if (!check_status)
     {
+        // we use dualized the spec
+        game_is_real = check_real_formula(spot::formula::Not(formula),
+                                          outputs, inputs,
+                                          k_to_iterate, !is_moore, output_file_name);
+        spdlog::get("console")->info() << "checking unreal, status: " << game_is_real;
+    }
+    else
+    {
+        game_is_real = check_real_formula(formula,
+                                          inputs, outputs,
+                                          k_to_iterate, is_moore, output_file_name);
+
+        spdlog::get("console")->info() << "checking real, status: " << game_is_real;
+    }
+
+    if (!game_is_real)
+    {   // game is won by Adam, but it does not mean the spec is unreal (due to k-reduction)
         cout << SYNTCOMP_STR_UNKNOWN << endl;
         return SYNTCOMP_RC_UNKNOWN;
     }
     else
-    {
+    {   // game is real, so we know for sure
         cout << (check_unreal ? SYNTCOMP_STR_UNREAL : SYNTCOMP_STR_REAL) << endl;
         return (check_unreal ? SYNTCOMP_RC_UNREAL : SYNTCOMP_RC_REAL);
     }
@@ -70,22 +85,21 @@ int sdf::run(const std::string &tlsf_file_name,
 bool sdf::check_real_atm(spot::twa_graph_ptr ucw_aut,
                          uint k,
                          bool is_moore,
-                         const std::vector<spot::formula> &inputs,
-                         const std::vector<spot::formula> &outputs,
+                         const std::set<spot::formula> &inputs,
+                         const std::set<spot::formula> &outputs,
                          const std::string &output_file_name)
 {
     auto k_aut = k_reduce(ucw_aut, k);
 
     GameSolver gameSolver(is_moore, inputs, outputs, k_aut, output_file_name, 3600);
-    bool is_realizable = gameSolver.run();
-    return is_realizable;
+    return gameSolver.check_realizability();
 }
 
 
-bool sdf::check_real_formula(const spot::formula &formula,
-                             const std::vector<spot::formula> &inputs,
-                             const std::vector<spot::formula> &outputs,
-                             const std::vector<uint> &k_to_iterate,
+bool sdf::check_real_formula(const spot::formula& formula,
+                             const set<spot::formula>& inputs,
+                             const set<spot::formula>& outputs,
+                             const vector<uint>& k_to_iterate,
                              bool is_moore,
                              const std::string &output_file_name)  // TODO: replace file name with less low-level
 {

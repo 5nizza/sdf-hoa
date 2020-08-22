@@ -33,9 +33,9 @@ std::vector<std::string> split_by_space(const std::string &s)
     return tokens;
 }
 
-template<typename T>
+template<typename TC>
 inline
-std::string join(const std::string &sep, const std::vector<T> &elements)
+std::string join(const std::string &sep, const TC& elements)
 {
     std::stringstream ss;
     uint i = 1;

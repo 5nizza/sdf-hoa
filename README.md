@@ -8,7 +8,7 @@ The theory behind the tool is described in
 
 ## Dependencies
 They should be placed into the folder `third_parties`.
-From more detalis, consult `CMakeLists.txt`, where you can find the exact folder names that `sdf-hoa` expects.
+From more details, consult `CMakeLists.txt`, where you can find the exact folder names that `sdf-hoa` expects.
 
 - modified aiger-1.9.4, get it from [https://github.com/5nizza/aisy/tree/master/aiger_swig](https://github.com/5nizza/aisy/tree/master/aiger_swig)
 - cudd-3.0.0

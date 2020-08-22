@@ -85,8 +85,9 @@ int main(int argc, const char *argv[])
     string tlsf_file_name(tlsf_arg.Get());
     string output_file_name(output_name ? output_name.Get() : "stdout");
     vector<uint> k_list(k_list_arg.Get());
-    if (k_list.empty()) k_list.push_back(4);
-    bool check_unreal(check_unreal_flag? true:false);
+    if (k_list.empty())
+        k_list.push_back(4);
+    bool check_unreal(check_unreal_flag);
 
     spdlog::get("console")->info()
             << "tlsf_file: " << tlsf_file_name << ", "
@@ -101,11 +102,11 @@ int main(int argc, const char *argv[])
     return sdf::run(tlsf_file_name, check_unreal, k_to_iterate, output_file_name);
 
     // PAST:
-    // - implemented non-parallel version of the tool
     // - finished tests
     /// CURRENT:
-    /// - implement the parallel version of the tool
+    /// - extract AIGER models
     // FUTURE:
-    // - extract AIGER models
+    // - Manhattan
+    // - implement the parallel version (real-unreal) of the tool so that it can participate in SYNTCOMP
 }
 

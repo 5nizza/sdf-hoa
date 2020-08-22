@@ -5,6 +5,7 @@
 #include <iostream>
 #include <algorithm>
 #include <tuple>
+#include <set>
 
 
 #define BDD spotBDD
@@ -42,7 +43,7 @@ to_str(int rc, const string& out, const string& err)
 }
 
 
-tuple<spot::formula, vector<spot::formula>, vector<spot::formula>, bool>
+tuple<spot::formula, set<spot::formula>, set<spot::formula>, bool>
 sdf::parse_tlsf(const string& tlsf_file_name)
 {
     int rc;
@@ -84,13 +85,13 @@ sdf::parse_tlsf(const string& tlsf_file_name)
     // The check below ensures that all APs appearing in the formula are from inputs or outputs
     // (that also ensures that the above note does not inflict)
 
-    vector<spot::formula> inputs, outputs;
+    set<spot::formula> inputs, outputs;
     for (const auto& ap: aps)
     {
         if (contains(str_inputs, ap.ap_name()))
-            inputs.push_back(ap);
+            inputs.insert(ap);
         else if (contains(str_outputs, ap.ap_name()))
-            outputs.push_back(ap);
+            outputs.insert(ap);
         else
             MASSERT(0, "unknown AP: " << ap);
     }
@@ -102,7 +103,7 @@ sdf::parse_tlsf(const string& tlsf_file_name)
     MASSERT(out_stripped == "moore" || out_stripped == "mealy", "unknown type string: " + out)
     bool is_moore = (out_stripped == "moore");
 
-    return tuple<spot::formula, vector<spot::formula>, vector<spot::formula>, bool>
+    return tuple<spot::formula, set<spot::formula>, set<spot::formula>, bool>
         (parsed_formula.f, inputs, outputs, is_moore);
 }
 
