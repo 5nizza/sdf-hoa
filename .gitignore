@@ -32,7 +32,10 @@ my-build
 *.out
 *.app
 
-# 
+# Dot graphs
+*.dot
+
+#
 func_tests/last.log
 */__pycache__
 */.idea
