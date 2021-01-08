@@ -11,6 +11,7 @@
 #include <fstream>
 #include <sstream>
 #include <vector>
+#include <set>
 #include <algorithm>
 #include <cctype>
 #include <locale>
@@ -19,7 +20,7 @@
 
 // TODO: use Boost
 
-namespace ak_utils
+namespace sdf
 {
 
 inline
@@ -108,6 +109,13 @@ bool contains(const std::vector<T> &elements, const T &elem)
     return std::find(elements.begin(), elements.end(), elem) != elements.end();
 }
 
+template<typename T>
+inline
+bool contains(const std::set<T>& elements, const T& elem)
+{
+    return elements.find(elem) != elements.end();
+}
+
 /* Execute the command, return <rc, stdout, stderr>. */
 std::tuple<int, std::string, std::string> execute(const char *cmd);
 std::tuple<int, std::string, std::string> execute(const std::string &cmd);
@@ -152,6 +160,16 @@ std::string lower(const std::string& what)
     std::transform(result.begin(), result.end(), result.begin(), ::tolower);
 
     return result;
+}
+
+
+template<typename E>
+E pop(std::set<E>& container)
+{
+    auto it = container.begin();
+    E elem = *it;
+    container.erase(it);
+    return elem;
 }
 
 

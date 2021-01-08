@@ -9,7 +9,7 @@
 
 
 using namespace std;
-using namespace ak_utils;
+using namespace sdf;
 
 
 int main(int argc, const char *argv[])
@@ -20,14 +20,21 @@ int main(int argc, const char *argv[])
 
     args::Positional<string> tlsf_arg
         (parser, "tlsf",
-         "File with TLSF",
+         "File with TLSF specification",
          args::Options::Required);
 
-    args::Flag check_unreal_flag
+    args::Flag check_dual_flag
             (parser,
-             "unreal",
-             "check unrealizability (instead of (default) realizability)",
-             {'u', "unreal"});
+             "dual",
+             "check the dualized spec (unrealizability)",
+             {'d', "dual"});
+
+    args::Flag check_real_only_flag
+            (parser,
+             "real",
+             "do not extract the model (check realizability only)",
+             {'r', "real"});
+
     args::ValueFlagList<uint> k_list_arg
             (parser,
              "k",
@@ -40,13 +47,19 @@ int main(int argc, const char *argv[])
     args::ValueFlag<string> output_name
             (parser,
              "o",
-             "the output file name (not yet supported)",
-             {'o'});
+             "file name for the synthesized model",
+             {'o', "output"});
+
+    args::Flag silence_flag
+            (parser,
+             "s",
+             "silent mode (the printed output adheres to SYNTCOMP)",
+             {'s', "silent"});
 
     args::Flag verbose_flag
             (parser,
              "v",
-             "verbose mode (the default is silent)",
+             "verbose mode (default: informational)",
              {'v', "verbose"});
 
     args::HelpFlag help
@@ -78,8 +91,10 @@ int main(int argc, const char *argv[])
     }
 
     // setup logging
-    if (!verbose_flag)
+    if (silence_flag)
         spdlog::set_level(spdlog::level::off);
+    if (verbose_flag)
+        spdlog::set_level(spdlog::level::debug);
 
     // parse args
     string tlsf_file_name(tlsf_arg.Get());
@@ -87,11 +102,12 @@ int main(int argc, const char *argv[])
     vector<uint> k_list(k_list_arg.Get());
     if (k_list.empty())
         k_list.push_back(4);
-    bool check_unreal(check_unreal_flag);
+    bool check_dual_spec(check_dual_flag);
+    bool check_real_only(check_real_only_flag);
 
     spdlog::get("console")->info()
             << "tlsf_file: " << tlsf_file_name << ", "
-            << "check_unreal: " << check_unreal << ", "
+            << "check_dual_spec: " << check_dual_spec << ", "
             << "k: " << "[" << join(", ", k_list) << "], "
             << "output_file: " << output_file_name;
 
@@ -99,13 +115,14 @@ int main(int argc, const char *argv[])
                                  range(k_list[0], k_list[1]+1):
                                  (k_list.size()>2? k_list: range(k_list[0], k_list[0]+1)));
 
-    return sdf::run(tlsf_file_name, check_unreal, k_to_iterate, output_file_name);
+    return sdf::run(check_dual_spec, tlsf_file_name, k_to_iterate, !check_real_only, output_file_name);
 
     // PAST:
     // - finished tests
     /// CURRENT:
-    /// - extract AIGER models
+    /// - extract AIGER models (I have it implemented; need to add MC tests; then refactor)
     // FUTURE:
+    // - create tmp folder and dump there dot automata (instead of printing)
     // - Manhattan
     // - implement the parallel version (real-unreal) of the tool so that it can participate in SYNTCOMP
 }

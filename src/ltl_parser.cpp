@@ -15,7 +15,7 @@
 #undef BDD
 
 using namespace std;
-using namespace ak_utils;
+using namespace sdf;
 
 
 void assert_do_not_intersect(vector<string> &inputs, vector<string> &outputs)

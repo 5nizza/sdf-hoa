@@ -13,39 +13,46 @@
     #include <spot/twaalgos/translate.hh>
 #undef BDD
 
+extern "C"
+{
+    #include <aiger.h>
+}
+
 
 namespace sdf
 {
 
-
 /**
- * @return return code is according to SYNTCOMP constants
- *         (i.e., if unreal then unreal_rc, if real then real_rc, if unknown then unknown_rc)
+ * @return code according to SYNTCOMP (unreal_rc if unreal, real_rc if real, else unknown_rc)
  */
-int run(const std::string& tlsf_file_name,
-        bool check_unreal,
+int run(bool check_unreal,
+        const std::string& tlsf_file_name,
         const std::vector<uint>& k_to_iterate,
-        const std::string& output_file_name);
+        bool extract_model=false,
+        const std::string& output_file_name="");
 
 /**
- * @return `true` iff after k-reduction the automaton is realizable
+ * @return true iff the formula is realizable
+ * @param extract_model: should extract model into `model`
  */
-bool check_real_atm(spot::twa_graph_ptr ucw_aut,
-                    uint k,
-                    bool is_moore,
-                    const std::set<spot::formula>& inputs,
-                    const std::set<spot::formula>& outputs,
-                    const std::string &output_file_name);
-
-/**
- * @return `true` iff a given formula is realizable using `k_to_iterate`
- */
-bool check_real_formula(const spot::formula& formula,
+bool synthesize_formula(const spot::formula& formula,
                         const std::set<spot::formula>& inputs,
                         const std::set<spot::formula>& outputs,
-                        const std::vector<uint>& k_to_iterate,
                         bool is_moore,
-                        const std::string& output_file_name);
+                        const std::vector<uint>& k_to_iterate,
+                        bool extract_model,
+                        aiger*& model);
 
+/**
+ * @return true iff the UCW automaton is realizable
+ * @param extract_model: should extract model into `model`
+ */
+bool synthesize_atm(spot::twa_graph_ptr ucw_aut,
+                    const std::set<spot::formula>& inputs,
+                    const std::set<spot::formula>& outputs,
+                    bool is_moore,
+                    const std::vector<uint>& k_to_iterate,
+                    bool extract_model,
+                    aiger*& model);
 
 } //namespace sdf

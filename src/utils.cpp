@@ -14,13 +14,13 @@
 using namespace std;
 
 
-tuple<int, string, string> ak_utils::execute(const string& cmd)
+tuple<int, string, string> sdf::execute(const string& cmd)
 {
-    return ak_utils::execute(cmd.c_str());
+    return sdf::execute(cmd.c_str());
 }
 
 
-tuple<int, string, string> ak_utils::execute(const char* cmd)
+tuple<int, string, string> sdf::execute(const char* cmd)
 {   // TODO:AK: what happens when cmd crashes?
     redi::ipstream proc(cmd, redi::pstreams::pstdout | redi::pstreams::pstderr);
     string line;

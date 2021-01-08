@@ -58,10 +58,9 @@ TEST_P(TestSpec, check_unreal)
 {
     auto spec = GetParam();
 
-    auto status = sdf::run("./specs/" + spec.name,
-                           true,
-                           {4},
-                           "");
+    auto status = sdf::run(true,
+                           "./specs/" + spec.name,
+                           {4});
 
     if (spec.is_real)
         EXPECT_EQ(SYNTCOMP_RC_UNKNOWN, status);
@@ -74,10 +73,9 @@ TEST_P(TestSpec, check_real)
 {
     auto spec = GetParam();
 
-    auto status = sdf::run("./specs/" + spec.name,
-                           false,
-                           {4},
-                           "");
+    auto status = sdf::run(false,
+                           "./specs/" + spec.name,
+                           {4});
 
     if (spec.is_real)
         EXPECT_EQ(SYNTCOMP_RC_REAL, status);
