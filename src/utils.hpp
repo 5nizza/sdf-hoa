@@ -158,7 +158,6 @@ std::string lower(const std::string& what)
 //    https://stackoverflow.com/a/313990/801203
     std::string result = what;
     std::transform(result.begin(), result.end(), result.begin(), ::tolower);
-
     return result;
 }
 
@@ -173,4 +172,15 @@ E pop(std::set<E>& container)
 }
 
 
-} // namespace ak_utils
+inline
+std::string create_tmp_folder()
+{
+    std::string path_tmp_str = "/tmp/XXXXXX";
+    std::string folder = mkdtemp((char*)path_tmp_str.c_str());  // (char*) is a hack but path_tmp_str lives long enough, so OK
+    if (folder.empty())
+        throw std::string("failure to create tmp folder");
+    return folder;
+}
+
+
+} // namespace sdf

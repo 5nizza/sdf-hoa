@@ -188,7 +188,7 @@ void sdf::GameSolver::build_pre_trans_func()
     ///////
     const char* inames[cudd.ReadSize()];
     string inames_str[cudd.ReadSize()];  // we have to store those strings for the time DumpDot is operating
-    for (uint i = 0; i < cudd.ReadSize(); ++i)
+    for (uint i = 0; i < (uint)cudd.ReadSize(); ++i)
     {
         inames_str[i] = cudd.getVariableName(i);
         inames[i] = inames_str[i].c_str();
@@ -255,7 +255,7 @@ vector<string> split(const string &s, char delim)
 VecUint get_order(Cudd &cudd)
 {
     VecUint order;
-    for (uint i = 0; i < cudd.ReadSize(); ++i)
+    for (uint i = 0; i < (uint)cudd.ReadSize(); ++i)
         order.push_back(cudd.ReadInvPerm(i));
     return order;
 }
@@ -721,21 +721,21 @@ aiger* sdf::GameSolver::synthesize()
     log_time("extract_output_funcs");
 
     // ------- model checking --------
-    BDD new_ = error;
-    for (uint i = 1; ; ++i)
-    {
-        INF("MC iteration: " << i);
-        BDD old = new_;
-
-        new_ = old | pre_sys2(old);
-
-        if ((init & new_) != cudd.bddZero())
-            MASSERT(0, "MC produced a CEX");
-
-        if (new_ == old)
-            break;
-    }
-    INF("successfully verified");  // TODO: remove me
+//    BDD new_ = error;
+//    for (uint i = 1; ; ++i)
+//    {
+//        INF("MC iteration: " << i);
+//        BDD old = new_;
+//
+//        new_ = old | pre_sys2(old);
+//
+//        if ((init & new_) != cudd.bddZero())
+//            MASSERT(0, "MC produced a CEX");
+//
+//        if (new_ == old)
+//            break;
+//    }
+//    INF("successfully verified");  // TODO: remove me
 
     // cleaning non-used BDDs
     non_det_strategy = cudd.bddZero();
@@ -779,7 +779,7 @@ void sdf::GameSolver::model_to_aiger()
 
     const char* inames[cudd.ReadSize()];
     string inames_str[cudd.ReadSize()];  // we have to store those strings for the time DumpDot is operating
-    for (uint i = 0; i < cudd.ReadSize(); ++i)
+    for (uint i = 0; i < (uint)cudd.ReadSize(); ++i)
     {
         inames_str[i] = cudd.getVariableName(i);
         inames[i] = inames_str[i].c_str();

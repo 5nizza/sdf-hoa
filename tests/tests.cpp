@@ -3,14 +3,17 @@
 //
 
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "gtest/gtest.h"
 #include "syntcomp_constants.hpp"
 #include "synthesizer.hpp"
+#include "utils.hpp"
 
 
 using namespace std;
+using namespace sdf;
 
 
 struct SpecParam
@@ -18,9 +21,13 @@ struct SpecParam
     const string name;
     const bool is_real;
 
-    SpecParam(const string& name_, bool is_real_) : name(name_), is_real(is_real_) { }
+    SpecParam(string name_, bool is_real_) : name(move(name_)), is_real(is_real_) { }
 };
 
+
+/**
+  * Checking realisability (without model extraction)
+**/
 
 ///TODO: fix this warning: see how to: https://github.com/google/googletest/blob/master/googletest/docs/advanced.md
 const vector<SpecParam> specs =
@@ -50,43 +57,97 @@ const vector<SpecParam> specs =
     SpecParam("mealy_moore_real.tlsf", true)
 };
 
+class RealCheckFixture : public ::testing::TestWithParam<SpecParam> { };
 
-class TestSpec : public ::testing::TestWithParam<SpecParam> { };
-
-
-TEST_P(TestSpec, check_unreal)
+TEST_P(RealCheckFixture, check_unreal)  // TODO: during test execution, test names are shown ugly (SpecParam should be updated)
 {
     auto spec = GetParam();
-
-    auto status = sdf::run(true,
-                           "./specs/" + spec.name,
-                           {4});
-
+    auto status = run(true, "./specs/" + spec.name, {4});
     if (spec.is_real)
-        EXPECT_EQ(SYNTCOMP_RC_UNKNOWN, status);
+        ASSERT_EQ(SYNTCOMP_RC_UNKNOWN, status);
     else
-        EXPECT_EQ(SYNTCOMP_RC_UNREAL, status);
+        ASSERT_EQ(SYNTCOMP_RC_UNREAL, status);
 }
 
-
-TEST_P(TestSpec, check_real)
+TEST_P(RealCheckFixture, check_real)
 {
     auto spec = GetParam();
-
-    auto status = sdf::run(false,
-                           "./specs/" + spec.name,
-                           {4});
-
+    auto status = run(false, "./specs/" + spec.name, {4});
     if (spec.is_real)
-        EXPECT_EQ(SYNTCOMP_RC_REAL, status);
+        ASSERT_EQ(SYNTCOMP_RC_REAL, status);
     else
-        EXPECT_EQ(SYNTCOMP_RC_UNKNOWN, status);
+        ASSERT_EQ(SYNTCOMP_RC_UNKNOWN, status);
 }
 
+INSTANTIATE_TEST_SUITE_P(RealUnreal, RealCheckFixture, ::testing::ValuesIn(specs));
 
-INSTANTIATE_TEST_SUITE_P(RealAndUnreal,
-                         TestSpec,
-                         ::testing::ValuesIn(specs));
+
+/**
+  * Checking Synthesis: extract and model check the models
+**/
+
+// they are all realisable by definition
+const vector<string> specs_for_mc =
+{
+    "load_balancer_real2.tlsf",
+    "simple_arbiter.tlsf",
+    "detector.tlsf",
+    "full_arbiter.tlsf",
+    "load_balancer.tlsf",
+    "round_robin_arbiter.tlsf",
+    "round_robin_arbiter2.tlsf",  // TODO: MC takes too much time
+    "prioritized_arbiter.tlsf",
+    "mealy_moore_real.tlsf"
+};
+
+class SyntWithMCFixture: public ::testing::TestWithParam<string>
+{
+public:
+    const string tmpFolder;
+
+    SyntWithMCFixture() : tmpFolder(create_tmp_folder())
+    {
+        cout << "(TEST) Using tmp folder: " << tmpFolder << endl;
+    }
+    ~SyntWithMCFixture() override
+    {
+        // TODO: rewrite: hackish: we need to remove the non-empty dir so `rmdir` does not work
+        string cmd = "rm -rf " + tmpFolder;
+        int res = system(cmd.c_str());
+        MASSERT(res == 0, "could not remove the tmp folder");
+    }
+};
+
+TEST_P(SyntWithMCFixture, synt_and_verify)
+{
+    auto spec = GetParam();
+    auto specPath = "./specs/" + spec;
+    auto modelPath = tmpFolder + "/" + spec + ".aag";
+    cout << "(TEST) SYNTHESIS..." << endl;
+    auto status = sdf::run(false, specPath, {2}, true, modelPath);
+    ASSERT_EQ(SYNTCOMP_RC_REAL, status);
+    cout << "(TEST) SYNTHESIS: SUCCESS!" << endl;
+
+    cout << "(TEST) VERIFICATION..." << endl;
+    int rc;
+    string out, err;
+    string mcPath = "/home/art/software/tlsf_model_checker/mc.sh";  // TODO: add config file
+    tie(rc, out, err) = execute(mcPath + " " + modelPath + " " + specPath);
+    if (rc != 0)
+    {
+        cout << "(TEST) MC failed: (rc!=0): " << rc << ", spec: " << specPath;
+        cout << "stdout was: " << endl << out << endl;
+        cout << "stderr was: " << endl << err << endl;
+        FAIL();
+    }
+
+    cout << out << endl;
+    cout << "(TEST) VERIFICATION: SUCCESS!" << endl;
+}
+
+INSTANTIATE_TEST_SUITE_P(SyntWithMC,
+                         SyntWithMCFixture,
+                         ::testing::ValuesIn(specs_for_mc));
 
 
 /// For future: good to check the exact values of parameter k that makes specs realizable.

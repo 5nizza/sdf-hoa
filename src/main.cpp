@@ -102,8 +102,8 @@ int main(int argc, const char *argv[])
     vector<uint> k_list(k_list_arg.Get());
     if (k_list.empty())
         k_list.push_back(4);
-    bool check_dual_spec(check_dual_flag);
-    bool check_real_only(check_real_only_flag);
+    bool check_dual_spec(check_dual_flag.Get());
+    bool check_real_only(check_real_only_flag.Get());
 
     spdlog::get("console")->info()
             << "tlsf_file: " << tlsf_file_name << ", "
@@ -118,9 +118,9 @@ int main(int argc, const char *argv[])
     return sdf::run(check_dual_spec, tlsf_file_name, k_to_iterate, !check_real_only, output_file_name);
 
     // PAST:
-    // - finished tests
+    // - finished model extraction
     /// CURRENT:
-    /// - extract AIGER models (I have it implemented; need to add MC tests; then refactor)
+    /// - add tests for model extraction
     // FUTURE:
     // - create tmp folder and dump there dot automata (instead of printing)
     // - Manhattan
