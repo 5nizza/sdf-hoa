@@ -12,6 +12,10 @@
 #include "utils.hpp"
 
 
+// TODO: add config file
+#define MC_PATH string("/home/art/software/tlsf_model_checker/mc.sh")
+
+
 using namespace std;
 using namespace sdf;
 
@@ -48,13 +52,14 @@ const vector<SpecParam> specs =
 
     SpecParam("load_balancer_real2.tlsf", true),
     SpecParam("simple_arbiter.tlsf", true),
+    SpecParam("simple_arbiter_3.tlsf", true),
     SpecParam("detector.tlsf", true),
     SpecParam("full_arbiter.tlsf", true),
     SpecParam("load_balancer.tlsf", true),
     SpecParam("round_robin_arbiter.tlsf", true),
     SpecParam("round_robin_arbiter2.tlsf", true),
     SpecParam("prioritized_arbiter.tlsf", true),
-    SpecParam("mealy_moore_real.tlsf", true)
+    SpecParam("mealy_moore_real.tlsf", true),
 };
 
 class RealCheckFixture : public ::testing::TestWithParam<SpecParam> { };
@@ -91,11 +96,11 @@ const vector<string> specs_for_mc =
 {
     "load_balancer_real2.tlsf",
     "simple_arbiter.tlsf",
+    "simple_arbiter_3.tlsf",
     "detector.tlsf",
     "full_arbiter.tlsf",
     "load_balancer.tlsf",
     "round_robin_arbiter.tlsf",
-    "round_robin_arbiter2.tlsf",  // TODO: MC takes too much time
     "prioritized_arbiter.tlsf",
     "mealy_moore_real.tlsf"
 };
@@ -131,8 +136,7 @@ TEST_P(SyntWithMCFixture, synt_and_verify)
     cout << "(TEST) VERIFICATION..." << endl;
     int rc;
     string out, err;
-    string mcPath = "/home/art/software/tlsf_model_checker/mc.sh";  // TODO: add config file
-    tie(rc, out, err) = execute(mcPath + " " + modelPath + " " + specPath);
+    tie(rc, out, err) = execute(MC_PATH + " " + modelPath + " " + specPath);
     if (rc != 0)
     {
         cout << "(TEST) MC failed: (rc!=0): " << rc << ", spec: " << specPath;
@@ -152,7 +156,7 @@ INSTANTIATE_TEST_SUITE_P(SyntWithMC,
 
 /// For future: good to check the exact values of parameter k that makes specs realizable.
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
