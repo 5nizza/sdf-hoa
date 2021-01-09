@@ -1,7 +1,6 @@
 #include <iostream>
 #include <unordered_map>
 #include <unordered_set>
-#include <sstream>
 #include <vector>
 #include <algorithm>
 #include <spdlog/spdlog.h>
@@ -19,21 +18,20 @@
 
 
 extern "C" {
-#include <cuddInt.h>  // useful for debugging to access the reference count
-};
+    #include <cuddInt.h>  // useful for debugging to access the reference count
+}
 
 
-#define IS_NEGATED(l) ((l & 1) == 1)
-#define STRIP_LIT(lit) (lit & ~1)
 #define NEGATED(lit) (lit ^ 1)
 
 
 #define logger spdlog::get("console")
-#define DEBUG(message) logger->debug()<<message;
-#define INF(message) logger->info()<<message;
+#define DEBUG(message) logger->debug()<<message
+#define INF(message) logger->info()<<message
 
 // TODO: use temporary object that logs time on destruction
-#define log_time(message) {spdlog::get("console")->info() << message << " took (sec): " << timer.sec_restart();}
+#define log_time(message) spdlog::get("console")->info() << message << " took (sec): " << timer.sec_restart()
+
 
 using namespace std;
 
@@ -46,11 +44,8 @@ typedef unordered_set<uint> SetUint;
 vector<BDD> sdf::GameSolver::get_controllable_vars_bdds()
 {
     vector<BDD> result;
-    for (ulong i = inputs.size(); i < inputs_outputs.size(); ++i)
-    {
-        BDD var_bdd = cudd.bddVar(static_cast<int>(i));
-        result.push_back(var_bdd);
-    }
+    for (uint i = inputs.size(); i < inputs_outputs.size(); ++i)
+        result.push_back(cudd.ReadVars(i));
     return result;
 }
 
@@ -59,10 +54,7 @@ vector<BDD> sdf::GameSolver::get_uncontrollable_vars_bdds()
 {
     vector<BDD> result;
     for (uint i = 0; i < inputs.size(); ++i)
-    {
-        BDD var_bdd = cudd.bddVar(i);  // TODO: should be ReadIthVar
-        result.push_back(var_bdd);
-    }
+        result.push_back(cudd.ReadVars(i));
     return result;
 }
 
@@ -81,7 +73,7 @@ void sdf::GameSolver::build_error_bdd()
     error = cudd.bddZero();
     for (auto s = 0u; s < aut->num_states(); ++s)
         if (aut->state_is_accepting(s))
-            error |= cudd.bddVar(s + NOF_SIGNALS);
+            error |= cudd.bddVar(s + NOF_SIGNALS);  // NOLINT(cppcoreguidelines-narrowing-conversions)
 }
 
 
@@ -94,9 +86,9 @@ void sdf::GameSolver::build_init_state_bdd()
     init = cudd.bddOne();
     for (auto s = 0u; s < aut->num_states(); s++)
         if (s != aut->get_init_state_number())
-            init &= ~cudd.bddVar(s + NOF_SIGNALS);
+            init &= ~cudd.bddVar(s + NOF_SIGNALS); // NOLINT(cppcoreguidelines-narrowing-conversions)
         else
-            init &= cudd.bddVar(s + NOF_SIGNALS);
+            init &= cudd.bddVar(s + NOF_SIGNALS);  // NOLINT(cppcoreguidelines-narrowing-conversions)
 }
 
 
@@ -108,21 +100,6 @@ BDD bdd_from_ap(const spot::formula& ap,
                         find(inputs_outputs.begin(), inputs_outputs.end(), ap));
     MASSERT(idx < (long) inputs_outputs.size(), "idx is out of range for proposition: " << ap);
     return cudd.bddVar((int) idx);
-}
-
-
-spot::formula ap_from_bdd(const BDD& var_bdd,
-                          const vector<spot::formula>& inputs_outputs,
-                          Cudd& cudd)
-{
-    MASSERT(var_bdd.IsVar(), "the incoming BDD should be a variable");
-
-    auto cudd_idx = var_bdd.NodeReadIndex();
-
-    MASSERT(cudd_idx < (long) inputs_outputs.size(),
-            "the incoming BDD should correspond to inputs or outputs: " << cudd_idx << " vs. " << inputs_outputs.size());
-
-    return inputs_outputs[cudd_idx];
 }
 
 
@@ -163,6 +140,26 @@ BDD translate_formula_into_cuddBDD(const spot::formula& formula,
 }
 
 
+// This function is not currently used but useful for debugging:
+// dump BDD as a dot
+void dumpBddAsDot(Cudd& cudd, const BDD& model, const string& name)
+{
+    const char* inames[cudd.ReadSize()];
+    string inames_str[cudd.ReadSize()];  // we have to store those strings for the time DumpDot is operating
+    for (uint i = 0; i < (uint)cudd.ReadSize(); ++i)
+    {
+        inames_str[i] = cudd.getVariableName(i);
+        inames[i] = inames_str[i].c_str();
+    }
+
+    FILE *file = fopen((name + ".dot").c_str(), "w");
+    const char *onames[] = {name.c_str()};
+
+    cudd.DumpDot((vector<BDD>) {model}, inames, onames, file);
+    fclose(file);
+}
+
+
 void sdf::GameSolver::build_pre_trans_func()
 {
     // This function ensures: for each state, cuddIdx = state+NOF_SIGNALS
@@ -185,16 +182,6 @@ void sdf::GameSolver::build_pre_trans_func()
             if (t.dst == s)
                 in_edges_by_state[s].push_back(t);
 
-    ///////
-    const char* inames[cudd.ReadSize()];
-    string inames_str[cudd.ReadSize()];  // we have to store those strings for the time DumpDot is operating
-    for (uint i = 0; i < (uint)cudd.ReadSize(); ++i)
-    {
-        inames_str[i] = cudd.getVariableName(i);
-        inames[i] = inames_str[i].c_str();
-    }
-    ///////
-
     for (uint s = 0; s < aut->num_states(); ++s)
     {
         BDD s_transitions = cudd.bddZero();
@@ -202,19 +189,12 @@ void sdf::GameSolver::build_pre_trans_func()
         {   // t has src, dst, cond, acc
             //INF("  edge: " << t.src << " -> " << t.dst << ": " << spot::bdd_to_formula(t.cond, spot_bdd_dict) << ": " << t.acc);
 
-            BDD s_t = cudd.bddVar(t.src + NOF_SIGNALS)
+            BDD s_t = cudd.ReadVars(t.src + NOF_SIGNALS)  // NOLINT(cppcoreguidelines-narrowing-conversions)
                       & translate_formula_into_cuddBDD(spot::bdd_to_formula(t.cond, spot_bdd_dict), inputs_outputs, cudd);
             s_transitions |= s_t;
         }
         pre_trans_func[s + NOF_SIGNALS] = s_transitions;
-        {/////////
-            string sname = "s" + to_string(s);  // need to have variable with long enough life time
-            FILE *file = fopen((sname + ".dot").c_str(), "w");
-            const char *onames[] = {sname.c_str()};
-
-            cudd.DumpDot((vector<BDD>) {s_transitions}, inames, onames, file);
-            fclose(file);
-        }////////
+        //dumpBddAsDot(cudd, s_transitions, "s" + to_string(s));
     }
 }
 
@@ -313,10 +293,10 @@ get_group_candidates(const vector<VecUint>& orders,
 }
 
 
-void remove_intersecting(SetUint group,
+void remove_intersecting(const SetUint& group,
                          vector<SetUint>& groups)
 {
-    vector<SetUint>::iterator it = groups.begin();
+    auto it = groups.begin();
     while (it != groups.end())
         if (do_intersect(group, *it))
             it = groups.erase(it);
@@ -414,41 +394,6 @@ void update_order_if(Cudd& cudd, vector<VecUint>& orders)
     last_nof_orderings = cudd.ReadReorderings();
 }
 
-
-BDD sdf::GameSolver::pre_sys2(BDD dst)
-{
-    vector<BDD> substForOutputs;
-    for (uint i = 0; i < (uint)cudd.ReadSize(); ++i)
-        if (inputs.size() <= i && i < inputs_outputs.size())  // it is an output variable
-            substForOutputs.push_back(outModel_by_cuddIdx.find(i)->second);
-        else
-            substForOutputs.push_back(cudd.ReadVars(i));
-
-    hmap<uint, BDD> new_trans_func;
-    for (auto const &it : pre_trans_func)
-        new_trans_func[it.first] = it.second.VectorCompose(substForOutputs);
-
-
-    vector<BDD> substForTrans;
-    for (uint i = 0; i < (uint)cudd.ReadSize(); ++i)
-        if (i >= inputs_outputs.size())  // is state variable
-            substForTrans.push_back(new_trans_func.find(i)->second);
-        else
-            substForTrans.push_back(cudd.ReadVars(i));
-
-    dst = dst.VectorCompose(substForTrans);
-
-    BDD result = dst;
-    vector<BDD> uncontrollable = get_uncontrollable_vars_bdds();
-    if (!uncontrollable.empty())
-    {
-        BDD uncontrollable_cube = cudd.bddComputeCube(uncontrollable.data(),
-                                                      nullptr,
-                                                      (int)uncontrollable.size());
-        result = result.UnivAbstract(uncontrollable_cube);
-    }
-    return result;
-}
 
 BDD sdf::GameSolver::pre_sys(BDD dst) {
     /**
@@ -572,17 +517,14 @@ BDD sdf::GameSolver::get_nondet_strategy()
 
     INF("get_nondet_strategy..");
 
-    // TODO: do we need win_region?
+    // TODO: which produces smaller circuits?
     return ~error & win_region & win_region.VectorCompose(get_substitution());
-    // Should it be instead?
-    // return ~error & (win_region -> win_region.VectorCompose(get_substitution()));
+//    return ~win_region | (~error & win_region.VectorCompose(get_substitution()));
 }
 
 
 hmap<uint,BDD> sdf::GameSolver::extract_output_funcs()
 {
-    // TODO: why does it take 2s on round_robin2 while the rest takes 0s?
-
     INF("extract_output_funcs..");
 
     cudd.FreeTree();  // ordering that worked for win region computation might not work here
@@ -643,12 +585,10 @@ hmap<uint,BDD> sdf::GameSolver::extract_output_funcs()
 
         model_by_cuddidx[c.NodeReadIndex()] = c_model;
 
-        // killing node refs
+        // killing node refs: TODO: check if it affects anything
         c_must_be_false = c_must_be_true = c_can_be_false = c_can_be_true = c_arena = cudd.bddZero();
 
-        /// TODO: ak: strange -- the python version for the example amba_02_9n produces a smaller circuit (~5-10 times)!
-        /// (maybe it is due to the bug with order? See https://github.com/5nizza/sdf-hoa/issues/1)
-        non_det_strategy = non_det_strategy.Compose(c_model, c.NodeReadIndex());
+        non_det_strategy = non_det_strategy.Compose(c_model, (int)c.NodeReadIndex());
         //non_det_strategy = non_det_strategy & ((c & c_model) | (~c & ~c_model));
     }
 
@@ -676,13 +616,13 @@ bool sdf::GameSolver::check_realizability()
     for (uint i = 0; i < inputs_outputs.size(); ++i)
     {
         cudd.bddVar(i);
-        cudd.pushVariableName(inputs_outputs[i].ap_name());  // TODO: conflicts with `do_grouping`
+        cudd.pushVariableName(inputs_outputs[i].ap_name());
     }
     for (uint s = 0; s < aut->num_states(); ++s)
     {
-        cudd.bddVar(s + NOF_SIGNALS);
+        cudd.bddVar(s + NOF_SIGNALS);  // NOLINT(cppcoreguidelines-narrowing-conversions)
         string name = string("s") + to_string(s);
-        cudd.pushVariableName(name);  // TODO: this conflicts with `do_grouping` implementation
+        cudd.pushVariableName(name);
     }
 
     timer.sec_restart();
@@ -711,29 +651,12 @@ aiger* sdf::GameSolver::synthesize()
     log_time("get_nondet_strategy");
 
     // cleaning non-used BDDs
-    // init = error = win_region = cudd.bddZero();
+    init = error = win_region = cudd.bddZero();
     // we can't clear pre_trans_func bc we use it to define how latches (states) evolve in the impl
 
     /// FUTURE: set time limit on reordering? or even disable it if there is not enough time?
     outModel_by_cuddIdx = extract_output_funcs();
     log_time("extract_output_funcs");
-
-    // ------- model checking --------
-//    BDD new_ = error;
-//    for (uint i = 1; ; ++i)
-//    {
-//        INF("MC iteration: " << i);
-//        BDD old = new_;
-//
-//        new_ = old | pre_sys2(old);
-//
-//        if ((init & new_) != cudd.bddZero())
-//            MASSERT(0, "MC produced a CEX");
-//
-//        if (new_ == old)
-//            break;
-//    }
-//    INF("successfully verified");  // TODO: remove me
 
     // cleaning non-used BDDs
     non_det_strategy = cudd.bddZero();
@@ -775,22 +698,6 @@ void sdf::GameSolver::model_to_aiger()
     // Note: the models of outputs can depend on input and latch variables,
     //       but they do not depend on the output variables
 
-    const char* inames[cudd.ReadSize()];
-    string inames_str[cudd.ReadSize()];  // we have to store those strings for the time DumpDot is operating
-    for (uint i = 0; i < (uint)cudd.ReadSize(); ++i)
-    {
-        inames_str[i] = cudd.getVariableName(i);
-        inames[i] = inames_str[i].c_str();
-    }
-
-    {
-        FILE *file = fopen("win.dot", "w");
-        const char *onames[] = {"win"};
-
-        cudd.DumpDot((vector<BDD>) {win_region}, inames, onames, file);
-        fclose(file);
-    }
-
     set<uint> cuddIdxStatesUsed;
     for (const auto& it : outModel_by_cuddIdx)
     {
@@ -799,14 +706,9 @@ void sdf::GameSolver::model_to_aiger()
 
         uint aigerLit = walk(bddModel.getNode(), cuddIdxStatesUsed);
         aiger_by_cudd[bddVarIdx] = aigerLit;
-        auto outName = inputs_outputs[bddVarIdx].ap_name();  // TODO: I don't like this implicit knowledge
+        auto outName = inputs_outputs[bddVarIdx].ap_name();  // hm, I don't like this implicit knowledge
         aiger_add_output(aiger_lib, aigerLit, outName.c_str());
-
-        FILE* file = fopen((outName + ".dot").c_str(), "w");
-        const char* onames[] = {outName.c_str()};
-
-        cudd.DumpDot((vector<BDD>){it.second}, inames, onames, file);
-        fclose(file);
+        // dumpBddAsDot(cudd, bddModel, outName);
     }
 
     // aiger: add latches, but only those that are referenced in the output models (+implied dependencies).
@@ -851,16 +753,6 @@ uint sdf::GameSolver::walk(DdNode* a_dd, set<uint>& cuddIdxStatesUsed)  // TODO:
 
     :returns: literal representing input node
     **/
-
-//    if (pre_trans_func[NOF_SIGNALS].getRegularNode() == a_dd)
-//        INF("processing s0");
-//
-//    if (pre_trans_func[2+NOF_SIGNALS].getRegularNode() == a_dd)
-//        INF("processing s2");
-//
-//    BDD s3impl = pre_trans_func[3+NOF_SIGNALS];
-//    if (s3impl.getRegularNode() == a_dd)
-//        INF("processing s3");
 
     auto cached_lit = cache.find(Cudd_Regular(a_dd));
     if (cached_lit != cache.end())

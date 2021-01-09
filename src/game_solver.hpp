@@ -105,8 +105,6 @@ private:
 
     BDD pre_sys(BDD dst);  // also ensures that error is not violated
 
-    BDD pre_sys2(BDD src);
-
     BDD calc_win_region();
 
     BDD get_nondet_strategy();

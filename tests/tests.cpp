@@ -101,6 +101,7 @@ const vector<string> specs_for_mc =
     "full_arbiter.tlsf",
     "load_balancer.tlsf",
     "round_robin_arbiter.tlsf",
+//    "round_robin_arbiter2.tlsf",  // MC takes 4s
     "prioritized_arbiter.tlsf",
     "mealy_moore_real.tlsf"
 };
