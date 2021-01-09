@@ -703,8 +703,6 @@ aiger* sdf::GameSolver::synthesize()
     if (!check_realizability())
         return nullptr;
 
-    // TODO: check if enforcing reordering helps
-
     // now we have win_region and compute a nondet strategy
 
     cudd.AutodynDisable();  // TODO: disabling re-ordering greatly helps on some examples (load_balancer), but on others (prioritised_arbiter) it worsens things.

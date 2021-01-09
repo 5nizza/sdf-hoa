@@ -56,7 +56,7 @@ public:
      */
     bool check_realizability();
     /**
-     * @return model in in the AIGER format if the game is realizable otherwise return NULL
+     * @return model in the AIGER format if the game is realizable otherwise return NULL
      * (Beware of internal state: can be called only once!)
      */
     aiger* synthesize();
