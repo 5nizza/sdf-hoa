@@ -645,7 +645,7 @@ aiger* sdf::GameSolver::synthesize()
 
     // now we have win_region and compute a nondet strategy
 
-    cudd.AutodynDisable();  // TODO: disabling re-ordering greatly helps on some examples (load_balancer), but on others (prioritised_arbiter) it worsens things.
+    cudd.AutodynDisable();  // TODO: disabling re-ordering greatly helps on some examples (load_balancer, lift(?)), but on others (prioritised_arbiter) it worsens things.
 
     non_det_strategy = get_nondet_strategy();
     log_time("get_nondet_strategy");

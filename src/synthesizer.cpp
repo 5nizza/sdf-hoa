@@ -139,8 +139,10 @@ bool sdf::synthesize_formula(const spot::formula& formula,
     spot::translator translator;
     translator.set_type(spot::postprocessor::BA);
     translator.set_pref(spot::postprocessor::SBAcc);
-    translator.set_level(spot::postprocessor::Medium);  // on some examples the high optimization is the bottleneck
-    // TODO: double-check the above claim: I also tried lift: with optimization `High` it is much faster!
+    translator.set_level(spot::postprocessor::Medium);
+    // on some examples the high optimization is the bottleneck
+    // while Medium seems to be good enough (of course, better to benchmark this) // TODO
+    // examples: try_ack_arbiter, lift
 
     Timer timer;
     spot::twa_graph_ptr aut = translator.run(neg_formula);

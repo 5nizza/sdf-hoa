@@ -118,12 +118,13 @@ int main(int argc, const char *argv[])
     return sdf::run(check_dual_spec, tlsf_file_name, k_to_iterate, !check_real_only, output_file_name);
 
     // PAST:
-    // - finished model extraction
+    // - finished model extraction and added tests
     /// CURRENT:
-    /// - add tests for model extraction
+    /// - push to github???
     // FUTURE:
-    // - create tmp folder and dump there dot automata (instead of printing)
     // - Manhattan
     // - implement the parallel version (real-unreal) of the tool so that it can participate in SYNTCOMP
+    // - benchmarking: see TODOs in game_solver.cpp
+    // - config.h for tests.cpp?
 }
 
