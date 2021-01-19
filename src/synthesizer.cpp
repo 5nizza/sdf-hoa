@@ -92,6 +92,9 @@ int sdf::run(bool check_unreal,
         aiger_reset(model);
     }
 
+    if (check_unreal)
+      INF("(the game is won by Eve but the spec was dualized)");
+
     cout << (check_unreal ? SYNTCOMP_STR_UNREAL : SYNTCOMP_STR_REAL) << endl;
     return (check_unreal ? SYNTCOMP_RC_UNREAL : SYNTCOMP_RC_REAL);
 }
