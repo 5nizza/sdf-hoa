@@ -28,6 +28,7 @@ tuple<int, string, string> sdf::execute(const char* cmd)
     stringstream out;
     while (getline(proc.out(), line))
         out << line << '\n';
+    proc.clear();  // TODO: read redi docs --- why need to call this?
 
     stringstream err;
     while (getline(proc.err(), line))
