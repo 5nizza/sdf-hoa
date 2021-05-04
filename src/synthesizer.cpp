@@ -57,6 +57,9 @@ int sdf::run(bool check_unreal,
     bool is_moore;
     tie(formula, inputs, outputs, is_moore) = parse_tlsf(tlsf_file_name);
 
+    // TODO: what happens when tlsf does have inputs/outputs but the formula doesn't mention them?
+    //       (should still have it)
+
     INF("\n" <<
         "  tlsf: " << tlsf_file_name << "\n" <<
         "  formula: " << formula << "\n" <<

@@ -23,6 +23,7 @@ tuple<int, string, string> sdf::execute(const string& cmd)
 tuple<int, string, string> sdf::execute(const char* cmd)
 {   // TODO:AK: what happens when cmd crashes?
     redi::ipstream proc(cmd, redi::pstreams::pstdout | redi::pstreams::pstderr);
+
     string line;
 
     stringstream out;

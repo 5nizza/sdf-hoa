@@ -116,15 +116,5 @@ int main(int argc, const char *argv[])
                                  (k_list.size()>2? k_list: range(k_list[0], k_list[0]+1)));
 
     return sdf::run(check_dual_spec, tlsf_file_name, k_to_iterate, !check_real_only, output_file_name);
-
-    // PAST:
-    // - finished model extraction and added tests
-    /// CURRENT:
-    /// - push to github???
-    // FUTURE:
-    // - Manhattan
-    // - implement the parallel version (real-unreal) of the tool so that it can participate in SYNTCOMP
-    // - benchmarking: see TODOs in game_solver.cpp
-    // - config.h for tests.cpp?
 }
 
