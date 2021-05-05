@@ -2,10 +2,24 @@ binary
 cmake-build-debug
 build
 my-build
-./src/sdf-hoa-opt
-./src/sdf-hoa-debug
-./src/sdf-tlsf-opt
-./src/sdf-tlsf-debug
+src/sdf-hoa-opt
+src/sdf-hoa-debug
+src/sdf-tlsf-opt
+src/sdf-tlsf-debug
+sdf.cbp
+src/*.aag
+src/*.ehoa
+ideas
+TODO.md
+FLOW
+CMakeCache.txt
+CMakeFiles
+Testing
+cmake_install.cmake
+tests/run_tests
+tests/sdf-tests.cbp
+Makefile
+CTestTestfile.cmake
 
 # Compiled Object files
 *.slo
