@@ -1,0 +1,23 @@
+HOA: v1
+States: 4
+Start: 0
+AP: 4 "r_0" "g_0" "g_1" "r_1"
+acc-name: Buchi
+Acceptance: 1 Inf(0)
+properties: trans-labels explicit-labels state-acc stutter-invariant
+properties: very-weak
+controllable-AP: 1 2
+synt-moore: true
+--BODY--
+State: 0
+[!1 | !2] 0
+[1&2] 1
+[0&!1] 2
+[!2&3] 3
+State: 1 {0}
+[t] 1
+State: 2 {0}
+[!1] 2
+State: 3 {0}
+[!2] 3
+--END--

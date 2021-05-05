@@ -1,0 +1,17 @@
+HOA: v1
+States: 2
+Start: 0
+AP: 2 "g_0" "r_0"
+acc-name: Buchi
+Acceptance: 1 Inf(0)
+properties: trans-labels explicit-labels state-acc complete
+properties: deterministic stutter-invariant terminal
+controllable-AP: 0
+synt-moore: false
+--BODY--
+State: 0
+[!0&!1 | 0&1] 0
+[!0&1 | 0&!1] 1
+State: 1 {0}
+[t] 1
+--END--
