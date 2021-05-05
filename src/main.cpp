@@ -14,20 +14,14 @@ using namespace sdf;
 
 int main(int argc, const char *argv[])
 {
-    args::ArgumentParser parser("Synthesizer from LTL (TLSF format)");
+    args::ArgumentParser parser("Synthesizer from UCW (HOA format)");
     parser.helpParams.width = 100;
     parser.helpParams.helpindent = 26;
 
-    args::Positional<string> tlsf_arg
-        (parser, "tlsf",
-         "File with TLSF specification",
+    args::Positional<string> hoa_arg
+        (parser, "hoa",
+         "File with HOA specification",
          args::Options::Required);
-
-    args::Flag check_dual_flag
-            (parser,
-             "dual",
-             "check the dualized spec (unrealizability)",
-             {'d', "dual"});
 
     args::Flag check_real_only_flag
             (parser,
@@ -97,17 +91,15 @@ int main(int argc, const char *argv[])
         spdlog::set_level(spdlog::level::debug);
 
     // parse args
-    string tlsf_file_name(tlsf_arg.Get());
+    string hoa_file_name(hoa_arg.Get());
     string output_file_name(output_name ? output_name.Get() : "stdout");
     vector<uint> k_list(k_list_arg.Get());
     if (k_list.empty())
         k_list.push_back(4);
-    bool check_dual_spec(check_dual_flag.Get());
     bool check_real_only(check_real_only_flag.Get());
 
     spdlog::get("console")->info()
-            << "tlsf_file: " << tlsf_file_name << ", "
-            << "check_dual_spec: " << check_dual_spec << ", "
+            << "hoa_file: " << hoa_file_name << ", "
             << "k: " << "[" << join(", ", k_list) << "], "
             << "output_file: " << output_file_name;
 
@@ -115,6 +107,6 @@ int main(int argc, const char *argv[])
                                  range(k_list[0], k_list[1]+1):
                                  (k_list.size()>2? k_list: range(k_list[0], k_list[0]+1)));
 
-    return sdf::run(check_dual_spec, tlsf_file_name, k_to_iterate, !check_real_only, output_file_name);
+    return sdf::run(hoa_file_name, k_to_iterate, !check_real_only, output_file_name);
 }
 
