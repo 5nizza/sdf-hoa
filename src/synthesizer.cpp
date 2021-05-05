@@ -7,6 +7,7 @@
 #include "game_solver.hpp"
 #include "k_reduce.hpp"
 #include "ltl_parser.hpp"
+#include "ehoa_parser.hpp"
 #include "utils.hpp"
 #include "syntcomp_constants.hpp"
 #include "timer.hpp"
@@ -45,6 +46,60 @@ Initializer libraryInitializer;
 #define DEBUG(message) {logger->debug() << message;}
 #define INF(message) {logger->info() << message;}
 
+
+int sdf::run(const std::string& hoa_file_name,
+             const std::vector<uint>& k_to_iterate,
+             bool extract_model,
+             const std::string& output_file_name)
+{
+    set<spot::formula> inputs, outputs;
+    spot::twa_graph_ptr aut;
+    bool is_moore;
+    tie(aut, inputs, outputs, is_moore) = parse_ehoa(hoa_file_name);
+
+    // TODO: what happens when tlsf does have inputs/outputs but the formula doesn't mention them?
+    //       (should still have it)
+
+    INF("\n" <<
+        "  hoa: " << hoa_file_name << "\n" <<
+        "  inputs: " << join(", ", inputs) << "\n" <<
+        "  outputs: " << join(", ", outputs) << "\n" <<
+        "  UCW atm size: " << aut->num_states() << "\n" <<
+        "  is_moore: " << is_moore);
+
+    {   // debug
+        stringstream ss;
+        spot::print_dot(ss, aut);
+        DEBUG("\n" << ss.str());
+    }
+
+    aiger* model;
+    bool game_is_real = synthesize_atm(aut, inputs, outputs, is_moore, k_to_iterate, extract_model, model);
+
+    if (!game_is_real)
+    {   // game is won by Adam, but it does not mean the invoked spec is unrealizable (due to k-reduction)
+        cout << SYNTCOMP_STR_UNKNOWN << endl;
+        return SYNTCOMP_RC_UNKNOWN;
+    }
+
+    // game is won by Eve, so the spec is realizable
+
+    if (extract_model)
+    {
+        if (!output_file_name.empty())
+        {
+            INF("writing a model to " << output_file_name);
+            int res = (output_file_name == "stdout") ?
+                      aiger_write_to_file(model, aiger_ascii_mode, stdout):
+                      aiger_open_and_write_to_file(model, output_file_name.c_str());
+            MASSERT(res, "Could not write the model to file");
+        }
+        aiger_reset(model);
+    }
+
+    cout << SYNTCOMP_STR_REAL << endl;
+    return SYNTCOMP_RC_REAL;
+}
 
 int sdf::run(bool check_unreal,
              const std::string& tlsf_file_name,

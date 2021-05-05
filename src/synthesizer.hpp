@@ -32,6 +32,14 @@ int run(bool check_unreal,
         const std::string& output_file_name="");
 
 /**
+ * @return code according to SYNTCOMP (real_rc if real, else unknown_rc)
+ */
+int run(const std::string& hoa_file_name,
+        const std::vector<uint>& k_to_iterate,
+        bool extract_model=false,
+        const std::string& output_file_name="");
+
+/**
  * @return true iff the formula is realizable
  * @param extract_model: should extract model into `model`
  */

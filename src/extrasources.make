@@ -8,6 +8,8 @@ timer.hpp
 my_assert.hpp
 ltl_parser.hpp
 ltl_parser.cpp
+ehoa_parser.hpp
+ehoa_parser.cpp
 utils.hpp
 utils.cpp
 syntcomp_constants.hpp

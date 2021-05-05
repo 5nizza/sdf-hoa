@@ -23,8 +23,20 @@
 namespace sdf
 {
 
+
 inline
-std::vector<std::string> split_by_space(const std::string &s)
+std::string readfile(const std::string& file_name)
+{
+    //https://stackoverflow.com/a/116220/801203
+    std::fstream in(file_name);
+    std::stringstream s;
+    s << in.rdbuf();
+    return s.str();
+}
+
+
+inline
+std::vector<std::string> split_by_space(const std::string& s)
 {
     std::istringstream iss(s);
     std::string token;
@@ -36,7 +48,7 @@ std::vector<std::string> split_by_space(const std::string &s)
 
 template<typename TC>
 inline
-std::string join(const std::string &sep, const TC& elements)
+std::string join(const std::string& sep, const TC& elements)
 {
     std::stringstream ss;
     uint i = 1;
@@ -50,20 +62,11 @@ std::string join(const std::string &sep, const TC& elements)
     return ss.str();
 }
 
-inline
-std::string readfile(const std::string &file_name)
-{
-    //https://stackoverflow.com/a/116220/801203
-    std::fstream in(file_name);
-    std::stringstream s;
-    s << in.rdbuf();
-    return s.str();
-}
 
 //https://stackoverflow.com/a/3418285/801203
 inline
-std::string substitute(const std::string &str,
-                       const std::string &from, const std::string &to)
+std::string substitute(const std::string& str,
+                       const std::string& from, const std::string& to)
 {   // substitutes the first occurrence
     std::string result(str);
 
@@ -75,10 +78,12 @@ std::string substitute(const std::string &str,
     return result;
 }
 
+
 inline
-std::string substituteAll(const std::string &str, const std::string &from, const std::string &to)
+std::string substituteAll(const std::string& str,
+                          const std::string& from, const std::string& to)
 {
-    //https://stackoverflow.com/a/3418285/801203
+    // https://stackoverflow.com/a/3418285/801203
     std::string result(str);
     MASSERT(!from.empty(), "`from` is empty: '" << from << "', '" << to << "'");
 
@@ -91,11 +96,40 @@ std::string substituteAll(const std::string &str, const std::string &from, const
     return result;
 }
 
+
+inline
+std::string trim_spaces(const std::string& arg)
+{
+    // python's strip()
+    std::string result = arg;
+
+    result.erase(result.begin(), std::find_if(result.begin(), result.end(), [](int ch) {
+        return !std::isspace(ch);
+    }));
+
+    result.erase(std::find_if(result.rbegin(), result.rend(), [](int ch) {
+        return !std::isspace(ch);
+    }).base(), result.end());
+
+    return result;
+}
+
+
+inline
+std::string lower(const std::string& what)
+{
+    // https://stackoverflow.com/a/313990/801203
+    std::string result = what;
+    std::transform(result.begin(), result.end(), result.begin(), ::tolower);
+    return result;
+}
+
+
 template<typename ... Args>
 inline
-std::string string_format(const std::string &format, Args ... args)
+std::string string_format(const std::string& format, Args ... args)
 {
-    //https://stackoverflow.com/a/26221725/801203
+    // https://stackoverflow.com/a/26221725/801203
     size_t size = (size_t) snprintf(nullptr, 0, format.c_str(), args ...) + 1; // Extra space for '\0'
     std::unique_ptr<char[]> buf(new char[size]);
     snprintf(buf.get(), size, format.c_str(), args ...);
@@ -104,7 +138,7 @@ std::string string_format(const std::string &format, Args ... args)
 
 template<typename T>
 inline
-bool contains(const std::vector<T> &elements, const T &elem)
+bool contains(const std::vector<T>& elements, const T &elem)
 {
     return std::find(elements.begin(), elements.end(), elem) != elements.end();
 }
@@ -132,33 +166,6 @@ std::vector<T> range(const T &min, const T &max_excluded)  // T to be able to us
     for (auto i = min; i < max_excluded; ++i)
         numbers.push_back(i);
     return numbers;
-}
-
-
-inline
-std::string trim_spaces(const std::string &arg)
-{
-    std::string result = arg;
-
-    result.erase(result.begin(), std::find_if(result.begin(), result.end(), [](int ch) {
-        return !std::isspace(ch);
-    }));
-
-    result.erase(std::find_if(result.rbegin(), result.rend(), [](int ch) {
-        return !std::isspace(ch);
-    }).base(), result.end());
-
-    return result;
-}
-
-
-inline
-std::string lower(const std::string& what)
-{
-//    https://stackoverflow.com/a/313990/801203
-    std::string result = what;
-    std::transform(result.begin(), result.end(), result.begin(), ::tolower);
-    return result;
 }
 
 
