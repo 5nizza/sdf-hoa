@@ -42,7 +42,8 @@ int main(int argc, const char *argv[])
              "(thus, it is reset between SCCs). "
              "If you provide it twice (e.g. -k 1 -k 5), then I will try all values in that range. "
              "Default: 4.",
-             {'k'});
+             {'k'},
+             {4});
 
     args::ValueFlag<string> output_name
             (parser,
@@ -100,8 +101,6 @@ int main(int argc, const char *argv[])
     string tlsf_file_name(tlsf_arg.Get());
     string output_file_name(output_name ? output_name.Get() : "stdout");
     vector<uint> k_list(k_list_arg.Get());
-    if (k_list.empty())
-        k_list.push_back(4);
     bool check_dual_spec(check_dual_flag.Get());
     bool check_real_only(check_real_only_flag.Get());
 
