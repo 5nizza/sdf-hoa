@@ -25,9 +25,8 @@ extern "C" {
 #define NEGATED(lit) (lit ^ 1)
 
 
-#define logger spdlog::get("console")
-#define DEBUG(message) logger->debug()<<message
-#define INF(message) logger->info()<<message
+#define DEBUG(message) spdlog::get("console")->debug()<<message
+#define INF(message) spdlog::get("console")->info()<<message
 
 // TODO: use temporary object that logs time on destruction
 #define log_time(message) spdlog::get("console")->info() << message << " took (sec): " << timer.sec_restart()

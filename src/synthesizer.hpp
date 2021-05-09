@@ -1,6 +1,3 @@
-//
-// Created by ayrat on 29/06/18.
-//
 #pragma once
 
 #include <set>

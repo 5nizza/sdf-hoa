@@ -25,7 +25,7 @@ bool get_synt_moore_flag(const string& hoa_file_name);
 
 
 std::tuple<spot::twa_graph_ptr, std::set<spot::formula>, std::set<spot::formula>, bool>
-sdf::parse_ehoa(const string &hoa_file_name)
+sdf::read_ehoa(const string& hoa_file_name)
 {
     // the parser assumes that the hoa file contains the additional lines:
     // "controllable-AP: 1 2 3"  <-- this lines describes the indices of controllable APs

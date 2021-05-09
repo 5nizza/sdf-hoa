@@ -1,7 +1,3 @@
-//
-// Created by ayrat on 31/05/18.
-//
-
 #pragma once
 
 #include <memory>
@@ -52,7 +48,7 @@ std::string join(const std::string& sep, const TC& elements)
 {
     std::stringstream ss;
     uint i = 1;
-    for (const auto &e: elements)
+    for (const auto& e: elements)
     {
         ss << e;
         if (i != elements.size())

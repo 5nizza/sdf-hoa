@@ -6,15 +6,24 @@
 
 #include "utils.hpp"
 #include "synthesizer.hpp"
+#include "reg_reduction.hpp"
 
 
 using namespace std;
 using namespace sdf;
 
 
+// TODO: this is ugly!
+#define DEBUG(message) spdlog::get("console")->debug()<<message
+#define INF(message) spdlog::get("console")->info()<<message
+
+
 int main(int argc, const char *argv[])
 {
-    args::ArgumentParser parser("Synthesizer from UCW (HOA format)");
+    auto logger = spdlog::stdout_logger_mt("console", false);
+    logger->set_pattern("%H:%M:%S %v ");
+
+    args::ArgumentParser parser("Register-Transducer Synthesizer from reg-UCW (in HOA format)");
     parser.helpParams.width = 100;
     parser.helpParams.helpindent = 26;
 
@@ -29,6 +38,13 @@ int main(int argc, const char *argv[])
              "do not extract the model (check realizability only)",
              {'r', "real"});
 
+    args::ValueFlag<uint> b_uint_arg
+            (parser,
+             "b",
+             "the bound on the number of transducer registers (default: 2)",
+             {'b'},
+             2);
+
     args::ValueFlagList<uint> k_list_arg
             (parser,
              "k",
@@ -36,7 +52,8 @@ int main(int argc, const char *argv[])
              "(thus, it is reset between SCCs). "
              "If you provide it twice (e.g. -k 1 -k 5), then I will try all values in that range. "
              "Default: 4.",
-             {'k'});
+             {'k'},
+             {4});
 
     args::ValueFlag<string> output_name
             (parser,
@@ -93,19 +110,19 @@ int main(int argc, const char *argv[])
     // parse args
     string hoa_file_name(hoa_arg.Get());
     string output_file_name(output_name ? output_name.Get() : "stdout");
+    uint b(b_uint_arg.Get());
     vector<uint> k_list(k_list_arg.Get());
-    if (k_list.empty())
-        k_list.push_back(4);
     bool check_real_only(check_real_only_flag.Get());
 
-    spdlog::get("console")->info()
-            << "hoa_file: " << hoa_file_name << ", "
-            << "k: " << "[" << join(", ", k_list) << "], "
-            << "output_file: " << output_file_name;
+    INF("hoa_file: " << hoa_file_name << ", " <<
+        "b (bound on # of registers): " << ", " <<
+        "k: " << "[" << join(", ", k_list) << "], " <<
+        "output_file: " << output_file_name);
 
     vector<uint> k_to_iterate = (k_list.size() == 2?
                                  range(k_list[0], k_list[1]+1):
                                  (k_list.size()>2? k_list: range(k_list[0], k_list[0]+1)));
+
 
     return sdf::run(hoa_file_name, k_to_iterate, !check_real_only, output_file_name);
 }

@@ -16,6 +16,6 @@ namespace sdf
  * Convert a file in the extended HOA format.
  */
 std::tuple<spot::twa_graph_ptr, std::set<spot::formula>, std::set<spot::formula>, bool>
-parse_ehoa(const std::string& hoa_file_name);
+read_ehoa(const std::string& hoa_file_name);
 
 } //namespace sdf

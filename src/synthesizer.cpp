@@ -1,7 +1,3 @@
-//
-// Created by ayrat on 29/06/18.
-//
-
 #include "synthesizer.hpp"
 
 #include "game_solver.hpp"
@@ -28,23 +24,9 @@ extern "C"
 using namespace std;
 using namespace sdf;
 
-// Ensures that the logger "console" exists
-struct Initializer
-{
-    std::shared_ptr<spdlog::logger> logger;
 
-    Initializer()
-    {
-        logger = spdlog::stdout_logger_mt("console", false);
-        spdlog::set_pattern("%H:%M:%S %v ");
-    }
-};
-Initializer libraryInitializer;
-
-
-#define logger spdlog::get("console")
-#define DEBUG(message) {logger->debug() << message;}
-#define INF(message) {logger->info() << message;}
+#define DEBUG(message) {spdlog::get("console")->debug() << message;}
+#define INF(message) {spdlog::get("console")->info() << message;}
 
 
 int sdf::run(const std::string& hoa_file_name,
@@ -55,7 +37,7 @@ int sdf::run(const std::string& hoa_file_name,
     set<spot::formula> inputs, outputs;
     spot::twa_graph_ptr aut;
     bool is_moore;
-    tie(aut, inputs, outputs, is_moore) = parse_ehoa(hoa_file_name);
+    tie(aut, inputs, outputs, is_moore) = read_ehoa(hoa_file_name);
 
     // TODO: what happens when tlsf does have inputs/outputs but the formula doesn't mention them?
     //       (should still have it)

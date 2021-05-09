@@ -1,7 +1,3 @@
-//
-// Created by ayrat on 24/05/18.
-//
-
 #include <unordered_map>
 
 

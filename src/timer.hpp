@@ -1,7 +1,3 @@
-//
-// Created by ayrat on 24/05/16.
-//
-
 #pragma once
 
 

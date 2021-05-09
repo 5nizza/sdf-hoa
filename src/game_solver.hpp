@@ -1,7 +1,3 @@
-//
-// Created by ayrat on yestoday.
-//
-
 #pragma once
 
 #include <utility>
