@@ -186,4 +186,16 @@ std::string create_tmp_folder()
 }
 
 
+template<typename E>
+std::set<E>
+a_minus_b(const std::set<E>& a, const std::set<E>& b)
+{
+    std::set<E> result;
+    for (const auto& e : a)
+        if (!contains(b, e))
+            result.insert(e);
+    return result;
+}
+
+
 } // namespace sdf

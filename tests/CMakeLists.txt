@@ -9,8 +9,11 @@ project(sdf-tests)
 
 include_directories("${THIRD_PARTIES}/googletest-release-1.10.0/googletest/include" "${THIRD_PARTIES}/googletest-release-1.10.0/googletest")
 
-add_executable(run_tests tests.cpp)
-target_link_libraries(run_tests "${SDF_LIB_NAME}" "${LIBS}" gtest gtest_main)
+add_executable(test_synt tests_synt.cpp)
+target_link_libraries(test_synt "${SDF_LIB_NAME}" "${LIBS}" gtest gtest_main)
+
+add_executable(test_reg_translator test_reg_translator.cpp)
+target_link_libraries(test_reg_translator "${SDF_LIB_NAME}" "${LIBS}" gtest gtest_main)
 
 file(COPY ./specs DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 

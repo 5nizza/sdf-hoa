@@ -7,6 +7,7 @@ list(APPEND SRC_FILES
         "utils.cpp"
         "reg_reduction.cpp"
         "partition_tst_asgn.cpp"
+        "logger_instance.cpp"
         )
 
 

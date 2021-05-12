@@ -25,8 +25,7 @@ using namespace sdf;
 
 int main(int argc, const char *argv[])
 {
-    auto logger = spdlog::stdout_logger_mt("console", false);
-    logger->set_pattern("%H:%M:%S %v ");
+    auto logger = spdlog::get("console");
 
     args::ArgumentParser parser("Reductor from reg-UCW to classical UCW (in HOA format)");
     parser.helpParams.width = 100;
