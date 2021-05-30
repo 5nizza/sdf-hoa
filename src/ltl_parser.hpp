@@ -5,7 +5,7 @@
 #include <set>
 
 #define BDD spotBDD
-#include <spot/tl/formula.hh>
+    #include <spot/tl/formula.hh>
 #undef BDD
 
 

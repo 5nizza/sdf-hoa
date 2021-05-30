@@ -2,8 +2,8 @@
 
 
 #define BDD spotBDD
-#include <spot/twa/twagraph.hh>
-#include <spot/twaalgos/sccinfo.hh>
+    #include <spot/twa/twagraph.hh>
+    #include <spot/twaalgos/sccinfo.hh>
 #undef BDD
 
 

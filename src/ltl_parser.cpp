@@ -9,9 +9,9 @@
 
 
 #define BDD spotBDD
-#include <spot/tl/formula.hh>
-#include <spot/tl/parse.hh>
-#include <spot/tl/print.hh>
+    #include <spot/tl/formula.hh>
+    #include <spot/tl/parse.hh>
+//    #include <spot/tl/print.hh>
 #undef BDD
 
 using namespace std;
@@ -49,7 +49,7 @@ sdf::parse_tlsf(const string& tlsf_file_name)
     int rc;
     string out, err;
 
-    tie(rc, out, err) = execute("syfco -f ltlxba -m fully " + tlsf_file_name);
+    tie(rc, out, err) = execute("syfco -f ltl -m fully " + tlsf_file_name);
     MASSERT(rc == 0 && err.empty(),
             "syfco exited with non-zero status or non-empty stderr: \n" + to_str(rc, out, err) + "\nfile:" + tlsf_file_name);
 
@@ -72,28 +72,26 @@ sdf::parse_tlsf(const string& tlsf_file_name)
 
     assert_do_not_intersect(str_inputs, str_outputs);
 
-    vector<spot::formula> aps;
-    parsed_formula.f.traverse(
-            [&aps](spot::formula f)
-            {
-                if (f.is(spot::op::ap))
-                    aps.push_back(f);
-                return false;  // always continue traversing
-            });
+    // separate APs into inputs and outputs
+    set<spot::formula> inputs;
+    for (const auto& s : str_inputs)
+        inputs.insert(spot::formula::ap(s));
 
-    // NOTE: syfco lowers all signal names in props
-    // The check below ensures that all APs appearing in the formula are from inputs or outputs
-    // (that also ensures that the above note does not inflict)
+    set<spot::formula> outputs;
+    for (const auto& s : str_outputs)
+        outputs.insert(spot::formula::ap(s));
 
-    set<spot::formula> inputs, outputs;
-    for (const auto& ap: aps)
-    {
-        if (contains(str_inputs, ap.ap_name()))
-            inputs.insert(ap);
-        else if (contains(str_outputs, ap.ap_name()))
-            outputs.insert(ap);
-        else
-            MASSERT(0, "unknown AP: " << ap);
+    {   // checking that the formula APs are from inputs or outputs
+        set<spot::formula> aps;
+        parsed_formula.f.traverse(
+                [&aps](const spot::formula& f)
+                {
+                    if (f.is(spot::op::ap))
+                        aps.insert(f);
+                    return false;  // always continue traversing
+                });
+        for (const auto& ap : aps)
+            MASSERT(contains(inputs, ap) || contains(outputs, ap), "the formula mentions AP not from inputs nor outputs: " << ap);
     }
 
     tie(rc, out, err) = execute("syfco -g " + tlsf_file_name);

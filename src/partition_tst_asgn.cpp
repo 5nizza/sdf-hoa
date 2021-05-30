@@ -214,6 +214,13 @@ void Algo::add_data(const Tst& tst, Partition& p)
     }
 }
 
+set<Tst> Algo::get_all_compatible_tests(const Partition& p, const Tst& incomplete_test)
+{
+    set<Tst> result;
+
+    return result;
+}
+
 
 
 

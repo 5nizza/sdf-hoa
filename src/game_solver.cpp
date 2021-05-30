@@ -561,7 +561,7 @@ hmap<uint,BDD> sdf::GameSolver::extract_output_funcs()
             // TODO: try the specific order where for output g_i the input r_i is abstracted last
             // while non relevant variables are abstracted first
             // (would be cool to calculate related variables and abstract them last)
-            auto v = cudd.ReadVars(var_cudd_idx);
+            auto v = cudd.ReadVars((int)var_cudd_idx);
             auto new_c_must_be_false = c_must_be_false.ExistAbstract(v);
             auto new_c_must_be_true = c_must_be_true.ExistAbstract(v);
 

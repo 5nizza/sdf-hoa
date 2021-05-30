@@ -198,4 +198,25 @@ a_minus_b(const std::set<E>& a, const std::set<E>& b)
 }
 
 
+template<typename E>
+std::set<E>
+a_union_b(const std::set<E>& a, const std::set<E>& b)
+{
+    std::set<E> result = a;
+    result.insert(b.begin(), b.end());
+    return result;
+}
+
+
+template<typename E, typename IteratorStart, typename IteratorEnd, typename UnaryPred>
+std::vector<E> filter(IteratorStart it1, IteratorEnd it2, UnaryPred pred)
+{
+    std::vector<E> result;
+    std::copy_if(it1, it2, std::back_inserter(result), pred);
+    return result;
+}
+
+
 } // namespace sdf
+
+

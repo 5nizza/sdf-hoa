@@ -60,6 +60,8 @@ const vector<SpecParam> specs =
     SpecParam("round_robin_arbiter2.tlsf", true),
     SpecParam("prioritized_arbiter.tlsf", true),
     SpecParam("mealy_moore_real.tlsf", true),
+
+    SpecParam("testing_unknown_APs.tlsf", true),
 };
 
 class RealCheckFixture : public ::testing::TestWithParam<SpecParam> { };

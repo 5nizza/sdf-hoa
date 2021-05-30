@@ -124,6 +124,7 @@ int main(int argc, const char *argv[])
 
         stringstream ss;
         spot::print_dot(ss, classical_ucw);
+//        spot::print_dot(ss, reg_ucw);
         DEBUG("\n" << ss.str());
     }
 

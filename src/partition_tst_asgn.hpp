@@ -155,6 +155,8 @@ struct Algo
     static void project_on_primed(Partition& p);
 
     static void unprime(Partition& p);
+
+    static std::set<Tst> get_all_compatible_tests(const Partition& p, const Tst& incomplete_test);
 };
 
 }
