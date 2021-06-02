@@ -24,6 +24,7 @@ namespace sdf
  */
 int run(bool check_unreal,
         const std::string& tlsf_file_name,
+        bool postprocess_atm,
         const std::vector<uint>& k_to_iterate,
         bool extract_model=false,
         const std::string& output_file_name="");
@@ -41,6 +42,7 @@ int run(const std::string& hoa_file_name,
  * @param extract_model: should extract model into `model`
  */
 bool synthesize_formula(const spot::formula& formula,
+                        bool postprocess_atm,
                         const std::set<spot::formula>& inputs,
                         const std::set<spot::formula>& outputs,
                         bool is_moore,

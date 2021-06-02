@@ -85,6 +85,7 @@ int sdf::run(const std::string& hoa_file_name,
 
 int sdf::run(bool check_unreal,
              const std::string& tlsf_file_name,
+             bool postprocess_atm,
              const std::vector<uint>& k_to_iterate,
              bool extract_model,
              const std::string& output_file_name)
@@ -108,8 +109,8 @@ int sdf::run(bool check_unreal,
     aiger* model;
     bool game_is_real;
     game_is_real = check_unreal?
-            synthesize_formula(spot::formula::Not(formula), outputs, inputs, !is_moore, k_to_iterate, extract_model, model):
-            synthesize_formula(formula, inputs, outputs, is_moore, k_to_iterate, extract_model, model);
+            synthesize_formula(spot::formula::Not(formula), postprocess_atm, outputs, inputs, !is_moore, k_to_iterate, extract_model, model):
+            synthesize_formula(formula, postprocess_atm, inputs, outputs, is_moore, k_to_iterate, extract_model, model);
 
     if (!game_is_real)
     {   // game is won by Adam, but it does not mean the invoked spec is unrealizable (due to k-reduction)
@@ -171,6 +172,7 @@ bool sdf::synthesize_atm(spot::twa_graph_ptr ucw_aut,
 
 
 bool sdf::synthesize_formula(const spot::formula& formula,
+                             bool postprocess_atm,
                              const set<spot::formula>& inputs,
                              const set<spot::formula>& outputs,
                              bool is_moore,
@@ -183,8 +185,10 @@ bool sdf::synthesize_formula(const spot::formula& formula,
     translator.set_type(spot::postprocessor::BA);
     translator.set_pref(spot::postprocessor::SBAcc);
     translator.set_level(spot::postprocessor::Medium);
+    if (postprocess_atm)
+        translator.set_level(spot::postprocessor::High);
     // on some examples the high optimization is the bottleneck
-    // while Medium seems to be good enough (of course, better to benchmark this) // TODO
+    // while Medium seems to be good enough (of course, better to benchmark this) // TODO: submitted to SYNTCOMP'21 two configurations: decide afterwards
     // examples: try_ack_arbiter, lift
 
     Timer timer;

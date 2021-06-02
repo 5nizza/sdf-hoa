@@ -9,7 +9,7 @@ namespace sdf
 /* Ensures that logger "console" exists. */
 class LoggerInitializer
 {
-    const std::shared_ptr<spdlog::logger> logger = spdlog::stdout_logger_mt("console", true);
+    const std::shared_ptr<spdlog::logger> logger = spdlog::stdout_logger_mt("console", false);  // colors do not go well with redirection of output
 public:
     LoggerInitializer()
     {

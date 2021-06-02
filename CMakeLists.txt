@@ -24,12 +24,14 @@ include_directories("${THIRD_PARTIES}/pstreams-1.0.3/")
 
 list(APPEND LIBS "${THIRD_PARTIES}/cudd-3.0.0/cudd/.libs/libcudd.a")
 list(APPEND LIBS "${THIRD_PARTIES}/aiger-1.9.4/aiger.o")
-list(APPEND LIBS "spot" "bddx")
 
 if(EXISTS "${THIRD_PARTIES}/spot-install-prefix/")
-    message("\n ************* I am going to use locally installed spot **************** \n")
+    message("\n ********* I am going to use locally installed spot (and link it statically) *********** \n")
     include_directories("${THIRD_PARTIES}/spot-install-prefix/include/")
-    link_directories("${THIRD_PARTIES}/spot-install-prefix/lib/")
+    list(APPEND LIBS "${THIRD_PARTIES}/spot-install-prefix/lib/libspot.a")
+    list(APPEND LIBS "${THIRD_PARTIES}/spot-install-prefix/lib/libbddx.a")
+else()
+    list(APPEND LIBS "spot" "bddx")
 endif()
 
 add_subdirectory(src)

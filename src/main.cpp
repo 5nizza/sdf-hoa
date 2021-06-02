@@ -70,6 +70,12 @@ int main(int argc, const char *argv[])
              "verbose mode (default: informational)",
              {'v', "verbose"});
 
+    args::Flag postprocess_atm_flag
+            (parser,
+             "p",
+             "postprocess automata after LTL translation (default: false)",
+             {'p', "p"});
+
     args::HelpFlag help
         (parser,
          "help",
@@ -110,6 +116,7 @@ int main(int argc, const char *argv[])
     vector<uint> k_list(k_list_arg.Get());
     bool check_dual_spec(check_dual_flag.Get());
     bool check_real_only(check_real_only_flag.Get());
+    bool postprocess_atm(postprocess_atm_flag.Get());
 
     INF("tlsf_file: " << tlsf_file_name << ", " <<
         "check_dual_spec: " << check_dual_spec << ", " <<
@@ -120,6 +127,6 @@ int main(int argc, const char *argv[])
                                  range(k_list[0], k_list[1]+1):
                                  (k_list.size()>2? k_list: range(k_list[0], k_list[0]+1)));
 
-    return sdf::run(check_dual_spec, tlsf_file_name, k_to_iterate, !check_real_only, output_file_name);
+    return sdf::run(check_dual_spec, tlsf_file_name, postprocess_atm, k_to_iterate, !check_real_only, output_file_name);
 }
 

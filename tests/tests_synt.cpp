@@ -69,7 +69,7 @@ class RealCheckFixture : public ::testing::TestWithParam<SpecParam> { };
 TEST_P(RealCheckFixture, check_unreal)  // TODO: during test execution, test names are shown ugly (SpecParam should be updated)
 {
     auto spec = GetParam();
-    auto status = run(true, "./specs/" + spec.name, {4});
+    auto status = run(true, "./specs/" + spec.name, false, {4});
     if (spec.is_real)
         ASSERT_EQ(SYNTCOMP_RC_UNKNOWN, status);
     else
@@ -79,7 +79,7 @@ TEST_P(RealCheckFixture, check_unreal)  // TODO: during test execution, test nam
 TEST_P(RealCheckFixture, check_real)
 {
     auto spec = GetParam();
-    auto status = run(false, "./specs/" + spec.name, {4});
+    auto status = run(false, "./specs/" + spec.name, false, {4});
     if (spec.is_real)
         ASSERT_EQ(SYNTCOMP_RC_REAL, status);
     else
@@ -132,7 +132,7 @@ TEST_P(SyntWithMCFixture, synt_and_verify)
     auto specPath = "./specs/" + spec;
     auto modelPath = tmpFolder + "/" + spec + ".aag";
     cout << "(TEST) SYNTHESIS..." << endl;
-    auto status = sdf::run(false, specPath, {2}, true, modelPath);
+    auto status = sdf::run(false, specPath, false, {2}, true, modelPath);
     ASSERT_EQ(SYNTCOMP_RC_REAL, status);
     cout << "(TEST) SYNTHESIS: SUCCESS!" << endl;
 

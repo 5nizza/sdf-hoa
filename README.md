@@ -14,6 +14,7 @@ From more details, consult `CMakeLists.txt`, where you can find the exact folder
 - cudd-3.0.0
 - spot-2.5.3
 - spdlog
+- [pstreams](http://pstreams.sourceforge.net/)
 - [args](https://github.com/Taywee/args): it should be placed into `third_parties` folder (see `CMakeLists.txt`)
 - [googletest](https://github.com/google/googletest) version 1.10.0 (see `CMakeLists.txt`):
   you will need to download the source code (together with its own `CMakeLists.txt`),
