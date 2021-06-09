@@ -120,23 +120,24 @@ int sdf::run(bool check_unreal,
 
     // game is won by Eve, so the (original or dualized) spec is realizable
 
+    if (check_unreal)
+      INF("(the game is won by Eve but the spec was dualized)");
+
+    cout << (check_unreal ? SYNTCOMP_STR_UNREAL : SYNTCOMP_STR_REAL) << endl;
+
     if (extract_model)
     {
         if (!output_file_name.empty())
         {
             INF("writing a model to " << output_file_name);
             int res = (output_file_name == "stdout") ?
-                    aiger_write_to_file(model, aiger_ascii_mode, stdout):
-                    aiger_open_and_write_to_file(model, output_file_name.c_str());
+                      aiger_write_to_file(model, aiger_ascii_mode, stdout):
+                      aiger_open_and_write_to_file(model, output_file_name.c_str());
             MASSERT(res, "Could not write the model to file");
         }
         aiger_reset(model);
     }
 
-    if (check_unreal)
-      INF("(the game is won by Eve but the spec was dualized)");
-
-    cout << (check_unreal ? SYNTCOMP_STR_UNREAL : SYNTCOMP_STR_REAL) << endl;
     return (check_unreal ? SYNTCOMP_RC_UNREAL : SYNTCOMP_RC_REAL);
 }
 

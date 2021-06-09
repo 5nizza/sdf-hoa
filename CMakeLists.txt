@@ -4,6 +4,7 @@ project(sdf VERSION 0.0.0)
 set(SDF_LIB_NAME sdf)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -std=c++14 -pthread")
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -std=c++14 -pthread -static")  # for syntcomp (with outdated StarExec)
 
 set(THIRD_PARTIES "${PROJECT_SOURCE_DIR}/third_parties")
 

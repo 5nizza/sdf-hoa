@@ -17,9 +17,9 @@ list(APPEND SRC_FILES
 #SET(CMAKE_BUILD_TYPE Debug CACHE STRING "default to debug" FORCE)
 
 # main (TLSF input format)
-add_executable       (tlsf-sdf-opt ${SRC_FILES} main)
-target_link_libraries(tlsf-sdf-opt "${LIBS}")
-set_target_properties(tlsf-sdf-opt PROPERTIES COMPILE_FLAGS "${COMPILE_FLAGS} -fPIC -DNDEBUG -O3")
+#add_executable       (tlsf-sdf-opt ${SRC_FILES} main)
+#target_link_libraries(tlsf-sdf-opt "${LIBS}")
+#set_target_properties(tlsf-sdf-opt PROPERTIES COMPILE_FLAGS "${COMPILE_FLAGS} -fPIC -DNDEBUG -O3")
 
 add_executable       (tlsf-sdf-debug ${SRC_FILES} main)
 target_link_libraries(tlsf-sdf-debug "${LIBS}")
