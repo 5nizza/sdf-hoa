@@ -21,12 +21,13 @@ From more details, consult `CMakeLists.txt`, where you can find the exact folder
   then it will be built together with me.
 
 ## Build
+
 To build, install dependencies into folder `third_parties` (except for `googletest` which is automatically built by `sdf`).
 Then:
 
 - create folder `build`
 - `cd build`
-- `cmake ..`
+- `cmake ../` (or `cmake -DCMAKE_BUILD_TYPE=Release ../`)
 - `make`
 
 The resulting binaries should be placed in folder `build/src/`.
