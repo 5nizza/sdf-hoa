@@ -6,6 +6,7 @@ src/sdf-hoa-opt
 src/sdf-hoa-debug
 src/sdf-tlsf-opt
 src/sdf-tlsf-debug
+src/main_tmp.cpp
 sdf.cbp
 src/*.aag
 src/*.ehoa
