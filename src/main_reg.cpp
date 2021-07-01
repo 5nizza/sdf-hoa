@@ -122,7 +122,6 @@ int main(int argc, const char *argv[])
                                  range(k_list[0], k_list[1]+1):
                                  (k_list.size()>2? k_list: range(k_list[0], k_list[0]+1)));
 
-
     return sdf::run(hoa_file_name, k_to_iterate, !check_real_only, output_file_name);
 }
 

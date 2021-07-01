@@ -11,8 +11,29 @@ using namespace sdf;
 
 string Cmp::to_str() const
 {
-    return r2.empty()? "*="+r1 : r1+"<*<"+r2;  // must use '*' (Tst::to_str relies on this)
+    if (is_EQUAL())
+        return "*="+rL;
+    else if (is_ABOVE())
+        return rL+"<*";
+    else if (is_BELOW())
+        return "*<"+rU;
+    else if (is_BETWEEN())
+        return rL+"<*<"+rU;
+    else
+        MASSERT(0, "unreachable");
 }
+
+bool Cmp::operator<(const Cmp &rhs) const
+{
+    if (rL < rhs.rL) return true;
+    if (rhs.rL < rL) return false;
+    return rU < rhs.rU;
+}
+bool Cmp::operator>(const Cmp &rhs) const { return rhs < *this; }
+bool Cmp::operator<=(const Cmp &rhs) const { return !(rhs < *this); }
+bool Cmp::operator>=(const Cmp &rhs) const { return !(*this < rhs); }
+bool Cmp::operator==(const Cmp &rhs) const { return rL == rhs.rL && rU == rhs.rU; }
+bool Cmp::operator!=(const Cmp &rhs) const { return !(rhs == *this); }
 
 
 string Tst::to_str() const
@@ -24,6 +45,41 @@ string Tst::to_str() const
     return "(" +
            data_partition.to_str() + ", " + join(", ", values) +
            ")";
+}
+
+bool Tst::operator==(const Tst &rhs) const
+{
+    return data_partition == rhs.data_partition &&
+           data_to_cmp == rhs.data_to_cmp;
+}
+
+bool Tst::operator!=(const Tst &rhs) const
+{
+    return !(rhs == *this);
+}
+
+bool Tst::operator<(const Tst &rhs) const
+{
+    if (data_partition < rhs.data_partition)
+        return true;
+    if (rhs.data_partition < data_partition)
+        return false;
+    return data_to_cmp < rhs.data_to_cmp;
+}
+
+bool Tst::operator>(const Tst &rhs) const
+{
+    return rhs < *this;
+}
+
+bool Tst::operator<=(const Tst &rhs) const
+{
+    return !(rhs < *this);
+}
+
+bool Tst::operator>=(const Tst &rhs) const
+{
+    return !(*this < rhs);
 }
 
 
@@ -49,6 +105,7 @@ std::set<std::string>& Partition::get_class_of(const string& r)
     MASSERT(0, "unreachable");
 }
 
+
 set<string> Partition::getR() const
 {
     set<string> R;
@@ -58,6 +115,13 @@ set<string> Partition::getR() const
                 R.insert(r);
     return R;
 }
+
+bool Partition::operator<(const Partition &rhs) const  { return repr < rhs.repr; }
+bool Partition::operator>(const Partition &rhs) const  { return rhs < *this; }
+bool Partition::operator<=(const Partition &rhs) const { return !(rhs < *this); }
+bool Partition::operator>=(const Partition &rhs) const { return !(*this < rhs); }
+bool Partition::operator==(const Partition &rhs) const { return repr == rhs.repr; }
+bool Partition::operator!=(const Partition &rhs) const { return !(rhs == *this); }
 
 
 string Asgn::to_str() const
@@ -182,30 +246,30 @@ void Algo::add_data(const Tst& tst, Partition& p)
     {
         string d = *d_class.begin();  // take _any_ d from the equivalence class {i} (if we had tst = (i=o, ...), the we could arbitrary choose i or o)
         Cmp d_cmp = tst.data_to_cmp.at(d);  // note that all elements from the same class have the same cmp.
-        if (d_cmp.type == Cmp::EQUAL)  // ... of the form *=r2
+        if (d_cmp.is_EQUAL())  // ... of the form *=r2
         {
-            p.get_class_of(d_cmp.r1).insert(d_class.begin(), d_class.end());  // insert all d into the same class
+            p.get_class_of(d_cmp.rL).insert(d_class.begin(), d_class.end());  // insert all d into the same class
         }
-        else if (d_cmp.type == Cmp::BELOW)
+        else if (d_cmp.is_BELOW())
         {
             p.repr.push_front(d_class);
         }
-        else if (d_cmp.type == Cmp::ABOVE)
+        else if (d_cmp.is_ABOVE())
         {
             p.repr.push_back(d_class);
         }
-        else if (d_cmp.type == Cmp::BETWEEN)  // .. the form  r1<*<r2
+        else if (d_cmp.is_BETWEEN())  // .. the form  r1<*<r2
         {
             {   // debug
-                auto pos1 = find(p.repr.begin(), p.repr.end(), p.get_class_of(d_cmp.r1));
-                auto pos2 = find(p.repr.begin(), p.repr.end(), p.get_class_of(d_cmp.r2));
+                auto pos1 = find(p.repr.begin(), p.repr.end(), p.get_class_of(d_cmp.rL));
+                auto pos2 = find(p.repr.begin(), p.repr.end(), p.get_class_of(d_cmp.rU));
                 auto dist = distance(pos1, pos2);
-                MASSERT(dist>0, "for cmp r1<*<r2, r1 must be smaller than r2: " << p);
+                MASSERT(dist>0, "for cmp rL<*<rU, rL must be smaller than rU: " << p);
             }
-            // we need to find the right place in p_with_data: we insert right before r2.
+            // we need to find the right place in p_with_data: we insert right before rU.
             // This is correct because we traverse d0<d1<d2<d3 from smaller di-1 to larger di,
             // and all previous di-1 were already inserted.
-            auto pos = find(p.repr.begin(), p.repr.end(), p.get_class_of(d_cmp.r2));
+            auto pos = find(p.repr.begin(), p.repr.end(), p.get_class_of(d_cmp.rU));
 
             p.repr.insert(pos, d_class);   // `list::insert` inserts _before_ pos
         }
@@ -213,23 +277,4 @@ void Algo::add_data(const Tst& tst, Partition& p)
             MASSERT(0, "unknown type of cmp: " << d_cmp);
     }
 }
-
-set<Tst> Algo::get_all_compatible_tests(const Partition& p, const Tst& incomplete_test)
-{
-    set<Tst> result;
-
-    return result;
-}
-
-
-
-
-
-
-
-
-
-
-
-
 

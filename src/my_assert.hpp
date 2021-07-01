@@ -4,10 +4,8 @@
 
 
 #define MASSERT(condition, message)                                                     \
-{                                                                                       \
-    if(!(condition))                                                                    \
+    do {if(!(condition))                                                                \
     {                                                                                   \
         std::cerr << __FILE__ << " (" << __LINE__ << ") : " << message << std::endl;    \
         abort();                                                                        \
-    }                                                                                   \
-}
+    }}while (0)

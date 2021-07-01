@@ -78,7 +78,7 @@ TEST_F(Partition1, ComputeNext)
     }
 }
 
-struct Partition2: public testing::Test { Partition p = Partition({set<string>({"r1", "r2", "r3"})}); };
+struct Partition2: public testing::Test { Partition p = Partition({{"r1", "r2", "r3"}}); };
 TEST_F(Partition2, ComputeNext)
 {
     {

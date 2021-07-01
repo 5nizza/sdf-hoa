@@ -13,8 +13,8 @@ endif()
 
 message("\n Build type: ${CMAKE_BUILD_TYPE}")
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-unknown-pragmas -std=c++14 -pthread")
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -std=c++14 -pthread -static")  # for syntcomp (with outdated StarExec)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-unknown-pragmas -std=c++17 -pthread")
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -std=c++17 -pthread -static")  # for syntcomp (with outdated StarExec)
 
 set(THIRD_PARTIES "${PROJECT_SOURCE_DIR}/third_parties")
 

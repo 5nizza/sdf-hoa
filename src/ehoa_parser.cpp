@@ -37,7 +37,7 @@ sdf::read_ehoa(const string& hoa_file_name)
 
     spot::bdd_dict_ptr dict = spot::make_bdd_dict();
     spot::parsed_aut_ptr pa = parse_aut(hoa_file_name, dict);
-    { MASSERT(!pa->aborted, ""); stringstream ss; if (pa->format_errors(ss)) MASSERT(0, ss.str()) }
+    { MASSERT(!pa->aborted, ""); stringstream ss; if (pa->format_errors(ss)) MASSERT(0, ss.str()); }
     aut = pa->aut;
 
     vector<string> controllableAPs = get_controllable_APs(hoa_file_name);

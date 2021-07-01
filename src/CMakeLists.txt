@@ -8,6 +8,7 @@ list(APPEND SRC_FILES
         "reg_reduction.cpp"
         "partition_tst_asgn.cpp"
         "logger_instance.cpp"
+        "graph_algo.cpp"
         )
 
 add_executable       (tlsf-sdf ${SRC_FILES} main)

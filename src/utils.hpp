@@ -8,6 +8,7 @@
 #include <sstream>
 #include <vector>
 #include <set>
+#include <map>
 #include <algorithm>
 #include <cctype>
 #include <locale>
@@ -142,6 +143,13 @@ bool contains(const std::vector<T>& elements, const T &elem)
 template<typename T>
 inline
 bool contains(const std::set<T>& elements, const T& elem)
+{
+    return elements.find(elem) != elements.end();
+}
+
+template<typename Container, typename T>
+inline
+bool contains(const Container& elements, const T& elem)
 {
     return elements.find(elem) != elements.end();
 }

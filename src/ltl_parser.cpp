@@ -98,7 +98,7 @@ sdf::parse_tlsf(const string& tlsf_file_name)
     MASSERT(rc == 0 && err.empty(),
             "syfco exited with non-zero status or non-empty stderr: " + to_str(rc, out, err));
     auto out_stripped = lower(trim_spaces(out));
-    MASSERT(out_stripped == "moore" || out_stripped == "mealy", "unknown type string: " + out)
+    MASSERT(out_stripped == "moore" || out_stripped == "mealy", "unknown type string: " + out);
     bool is_moore = (out_stripped == "moore");
 
     return tuple<spot::formula, set<spot::formula>, set<spot::formula>, bool>
