@@ -88,9 +88,7 @@ spot::twa_graph_ptr k_reduce(const spot::twa_graph_ptr &aut, uint max_nof_visits
 
     while (!kstate_state_to_process.empty())
     {
-        kState src_kstate(666, 666);
-        uint src_state;
-        tie(src_kstate, src_state) = kstate_state_to_process.back();
+        auto [src_kstate, src_state] = kstate_state_to_process.back();
         kstate_state_to_process.erase(kstate_state_to_process.end()-1);
 
         for (const auto &t: aut->out(src_state))
