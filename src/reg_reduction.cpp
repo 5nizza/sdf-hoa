@@ -15,15 +15,13 @@
 
 using namespace std;
 using namespace sdf;
-using namespace graph;
-
-
-using Vertex = uint;
-using EC = set<string>;   // equivalence class
 
 
 #define DEBUG(message) {spdlog::get("console")->debug() << message;}  // NOLINT(bugprone-macro-parentheses)
 #define INF(message)   {spdlog::get("console")->info()  << message;}  // NOLINT(bugprone-macro-parentheses)
+
+#define hmap unordered_map
+#define hset unordered_set
 
 static const string TST_CMP_TOKENS[] = {"=","≠","<",">","≤","≥"};  // NOLINT
 
@@ -101,7 +99,7 @@ spot::formula ctor_sys_asgn_r(const string& r)        { return spot::formula::ap
 spot::formula ctor_sys_out_r(const string& r)         { return spot::formula::ap("↑" + r); }
 
 
-void introduce_sysActionAPs(const set<string>& sysR,
+void introduce_sysActionAPs(const hset<string>& sysR,
                             spot::twa_graph_ptr& classical_ucw,
                             set<spot::formula>& sysTst,
                             set<spot::formula>& sysAsgn,
@@ -131,9 +129,9 @@ void introduce_sysActionAPs(const set<string>& sysR,
 }
 
 
-set<string> build_sysR(uint nof_sys_regs)
+hset<string> build_sysR(uint nof_sys_regs)
 {
-    set<string> result;
+    hset<string> result;
     for (uint i = 1; i<= nof_sys_regs; ++i)
         result.insert("r" + to_string(i));
     return result;
@@ -175,9 +173,9 @@ pair<string, string> parse_asgn_atom(const string& asgn_atom)
     return make_pair(var_name, reg);
 }
 
-set<string> build_atmR(const spot::twa_graph_ptr& reg_atm)
+hset<string> build_atmR(const spot::twa_graph_ptr& reg_atm)
 {
-    set<string> result;
+    hset<string> result;
     for (const auto& ap : reg_atm->ap())
     {
         const auto& ap_name = ap.ap_name();
@@ -242,20 +240,9 @@ void separate(const Container& cube,
     }
 }
 
-
-set<Tst> calc_all_possible_sys_i_tst(const Partition& p, const Tst& atm_i_tst)
-{
-    // TODO
-}
-
-set<pair<Asgn, string>> calc_all_possible_sys_asgn_out(const Partition& p, const Tst& atm_o_tst)
-{
-    // TODO
-}
-
 Asgn compute_asgn(const set<spot::formula>& atm_asgn_atoms)
 {
-    map<string, set<string>> asgn_data;  // e.g.: { i -> {r1,r2}, o -> {r3,r4} }
+    hmap<string, hset<string>> asgn_data;  // e.g.: { i -> {r1,r2}, o -> {r3,r4} }
     for (const auto& atom : atm_asgn_atoms)
     {
         auto var_reg = parse_asgn_atom(atom.ap_name());
@@ -264,34 +251,8 @@ Asgn compute_asgn(const set<spot::formula>& atm_asgn_atoms)
     return Asgn(asgn_data);
 }
 
-/*
- * Returns:
- * - a graph corresponding to the partition
- * - mapping vertex -> equivalence class
- */
-pair<Graph<Vertex>, map<Vertex, EC>> partition_to_graph(const Partition& p)
-{
-    map<Vertex, set<string>> vertex_to_ec;
-    Graph<Vertex> g;
-    int cur_v = 0;
-    for (const auto& ec : p.repr)
-    {
-        if (cur_v > 0)
-            g.add_edge(cur_v-1, cur_v);
 
-        vertex_to_ec[cur_v] = ec;
-        cur_v++;
-    }
-    return make_pair(g, vertex_to_ec);
-}
-
-Partition graph_to_partition(const Graph<Vertex>& p, const map<Vertex, EC>& vertex_to_class)
-{
-    // TODO
-}
-
-
-Vertex get_add_vertex(Graph<Vertex>& g, map<Vertex, EC>& v_to_ec, const string& var_name)
+V get_add_vertex(Graph& g, map<V, EC>& v_to_ec, const string& var_name)
 {
     for (const auto& v_ec : v_to_ec)
         if (contains(v_ec.second, var_name))
@@ -315,8 +276,8 @@ optional<Partition> compute_partial_p_io(const Partition& p, const set<spot::for
        : r2<i<r1 but p has r1<r2     (inconsistent wrt. p)
        : r2<i, r1<i and p has r1<r2  (redundant)
     */
-    Graph<Vertex> g;
-    map<Vertex,EC> v_to_ec;
+    Graph g;
+    map<V,EC> v_to_ec;
     tie(g, v_to_ec) = partition_to_graph(p);
 
     for (const auto& tst_atom : atm_tst_atoms)
@@ -396,40 +357,30 @@ bool a_is_less_b(const string& a, const string& b, const Partition& p, bool trea
     return !a_is_ge_b(a, b, p, treat_empty_as_plus_infinity);
 }
 
-Tst join_tst(const Tst& atm_tst, const Tst& sys_tst, const Partition& p)
-{
-    // TODO: revisit to double-check
-    // TODO: double-check: the case of TRUE Cmp
-    map<string, Cmp> new_tst;
-    for (const auto& name_cmp : atm_tst.data_to_cmp)
-    {
-        auto name = name_cmp.first;
-        auto atm_cmp = name_cmp.second;
-        auto sys_cmp = sys_tst.data_to_cmp.at(name);
-
-        if (atm_cmp.is_EQUAL())
-            new_tst.insert({name,atm_cmp});
-        else if (sys_cmp.is_EQUAL())
-            new_tst.insert({name,sys_cmp});
-        else // find the tightest bounds
-        {
-            auto max_rL = a_is_ge_b(sys_cmp.rL, atm_cmp.rL, p, false) ? sys_cmp.rL : atm_cmp.rL;
-            auto min_rU = a_is_ge_b(sys_cmp.rU, atm_cmp.rU, p, true)  ? atm_cmp.rU : sys_cmp.rU;
-            new_tst.insert({name, Cmp::Between(max_rL, min_rU)});
-        }
-    }
-    return Tst(atm_tst.data_partition, new_tst);
-}
-
-Asgn join_asgn(const Asgn& atm_i_asgn, const Asgn& sys_asgn)
-{
-    // TODO
-}
-
-Tst get_o_tst_from_sys_out(const Partition& p, const string& sys_out)
-{
-    // TODO
-}
+//////Tst join_tst(const Tst& atm_tst, const Tst& sys_tst, const Partition& p)
+//////{
+//////    // TODO: revisit to double-check
+//////    // TODO: double-check: the case of TRUE Cmp
+//////    map<string, Cmp> new_tst;
+//////    for (const auto& name_cmp : atm_tst.data_to_cmp)
+//////    {
+//////        auto name = name_cmp.first;
+//////        auto atm_cmp = name_cmp.second;
+//////        auto sys_cmp = sys_tst.data_to_cmp.at(name);
+//////
+//////        if (atm_cmp.is_EQUAL())
+//////            new_tst.insert({name,atm_cmp});
+//////        else if (sys_cmp.is_EQUAL())
+//////            new_tst.insert({name,sys_cmp});
+//////        else // find the tightest bounds
+//////        {
+//////            auto max_rL = a_is_ge_b(sys_cmp.rL, atm_cmp.rL, p, false) ? sys_cmp.rL : atm_cmp.rL;
+//////            auto min_rU = a_is_ge_b(sys_cmp.rU, atm_cmp.rU, p, true)  ? atm_cmp.rU : sys_cmp.rU;
+//////            new_tst.insert({name, Cmp::Between(max_rL, min_rU)});
+//////        }
+//////    }
+//////    return Tst(atm_tst.data_partition, new_tst);
+//////}
 
 
 /*
@@ -513,6 +464,15 @@ set<Partition> compute_all_p_with_i(const Partition& p, const Tst& atm_tst)
     return all_p_with_i;
 }
 
+Partition build_init_partition(const hset<string>& sysR, const hset<string>& atmR)
+{
+    Graph g;
+    g.add_vertex(0);
+    hmap<V, EC> v_to_ec;
+    v_to_ec[0] = a_union_b(sysR, atmR);
+
+    return Partition(g, v_to_ec);
+}
 
 void sdf::reduce(const spot::twa_graph_ptr& reg_ucw, uint nof_sys_regs,
                  spot::twa_graph_ptr& classical_ucw,
@@ -541,19 +501,18 @@ void sdf::reduce(const spot::twa_graph_ptr& reg_ucw, uint nof_sys_regs,
     auto r_init = reg_ucw->get_init_state_number();
     auto c_init = classical_ucw->new_state();
 
-    map<uint, pair<uint, Partition>> c_to_rp;  // 'classical state' to (reg-atm state, partition)
-    c_to_rp[c_init] = {r_init, Partition({ a_union_b(sysR, atmR) })};
+    hmap<uint, pair<uint, Partition>> c_to_rp;  // 'classical state' to (reg-atm state, partition)
+    c_to_rp.insert(make_pair(c_init, make_pair(r_init, build_init_partition(sysR, atmR))));
 
     set<uint> c_todo;
     c_todo.insert(c_init);
-    set<pair<uint, Partition>> processed;
+    hset<pair<uint, Partition>,pair_hash> processed;
 
     // main loop
     while (!c_todo.empty())
     {
         auto c = pop(c_todo);
-        auto r = c_to_rp[c].first;
-        auto p = c_to_rp[c].second;
+        auto [r,p] = c_to_rp.at(c);
         processed.insert({r, p});
 
         for (const auto& t: reg_ucw->out(r))

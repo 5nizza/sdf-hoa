@@ -59,6 +59,22 @@ std::string join(const std::string& sep, const TC& elements)
     return ss.str();
 }
 
+template<typename TC, typename ToStr>
+inline
+std::string join(const std::string& sep, const TC& elements, ToStr convert_to_str)
+{
+    std::stringstream ss;
+    uint i = 1;
+    for (const auto& e: elements)
+    {
+        ss << convert_to_str(e);
+        if (i != elements.size())
+            ss << sep;
+        i++;
+    }
+    return ss.str();
+}
+
 
 //https://stackoverflow.com/a/3418285/801203
 inline
@@ -206,11 +222,11 @@ a_minus_b(const std::set<E>& a, const std::set<E>& b)
 }
 
 
-template<typename E>
-std::set<E>
-a_union_b(const std::set<E>& a, const std::set<E>& b)
+template<typename Container>
+Container
+a_union_b(const Container& a, const Container& b)
 {
-    std::set<E> result = a;
+    Container result = a;  // copy
     result.insert(b.begin(), b.end());
     return result;
 }
@@ -225,6 +241,46 @@ std::vector<E> filter(IteratorStart it1, IteratorEnd it2, UnaryPred pred)
 }
 
 
+// source: modern c++ programming cookbook, page 254
+template<typename OrderedContainer, typename ElementHasher>
+size_t hash_ordered(const OrderedContainer& container, ElementHasher hasher)
+{
+    if (container.empty())
+        return 0;
+
+    size_t hash_value = 17;
+
+    hash_value = 31*hash_value + std::hash<size_t>()(container.size());
+    for (const auto& e : container)
+        hash_value = 31*hash_value + hasher(e);
+    return hash_value;
+}
+
+struct pair_hash
+{
+    template<typename T, typename U>
+    size_t operator()(const std::pair<T, U>& x) const
+    {
+        size_t hash_value = 17;
+        hash_value = 31*hash_value + std::hash<T>()(x.first);
+        hash_value = 31*hash_value + std::hash<U>()(x.second);
+        return hash_value;
+    }
+};
+
+
+// This function XOR's the hash values of the elements
+// (hence the order is not important)
+template<typename Container, typename ElementHasher>
+size_t xor_hash(const Container& container, ElementHasher hasher)
+{
+    if (container.empty())
+        return 0;
+
+    auto hash_value = std::hash<size_t>()(container.size());
+    for (const auto& e : container)
+        hash_value ^= hasher(e);
+    return hash_value;
+}
+
 } // namespace sdf
-
-
