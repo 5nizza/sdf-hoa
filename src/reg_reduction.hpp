@@ -33,10 +33,10 @@ void reduce(const spot::twa_graph_ptr& reg_ucw, uint nof_sys_regs,
 
 std::string extract_reg_from_action(const std::string& action_name);
 
-void parse_tst(const std::string& action_name,
-               std::string& t1,
-               std::string& t2,
-               std::string& cmp);
+//void parse_tst(const std::string& action_name,
+//               std::string& t1,
+//               std::string& t2,
+//               std::string& cmp);
 
 void tmp();
 

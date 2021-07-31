@@ -12,7 +12,7 @@ using namespace sdf;
 // bool Partition::operator==(const Partition &rhs) const { return repr == rhs.repr; }
 // bool Partition::operator!=(const Partition &rhs) const { return !(rhs == *this); }
 
-std::ostream& sdf::operator<<(ostream& out, const Partition& p)
+std::ostream& operator<<(ostream& out, const Partition& p)
 {
     auto convert_v_to_str = [&p](V v)
             {
@@ -49,7 +49,7 @@ size_t Partition::calc_hash() const
     return hash_of_v_to_ec ^ hash_of_g;
 }
 
-std::ostream& sdf::operator<<(ostream& out, const Asgn& asgn)
+std::ostream& operator<<(ostream& out, const Asgn& asgn)
 {
     if (asgn.asgn.empty())
         return out << "<keep>";

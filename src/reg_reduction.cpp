@@ -15,6 +15,7 @@
 
 using namespace std;
 using namespace sdf;
+using GA = graph::GraphAlgo;
 
 
 #define DEBUG(message) {spdlog::get("console")->debug() << message;}  // NOLINT(bugprone-macro-parentheses)
@@ -143,10 +144,8 @@ bool is_reg_name(const string& name) { return name[0] == 'r'; }
 
 
 /* Extract t1,t2,◇ from  t1◇t2 */
-void sdf::parse_tst(const string& action_name,
-                    string& t1,
-                    string& t2,
-                    string& cmp)
+tuple<string,string,string>
+parse_tst(const string& action_name)
 {
     MASSERT(is_atm_tst(action_name), action_name);
 
@@ -156,9 +155,11 @@ void sdf::parse_tst(const string& action_name,
         if ((pos_cmp = action_name.find(TST_CMP_TOKENS[index_cmp])) != string::npos)
             break;
 
-    cmp = TST_CMP_TOKENS[index_cmp];
-    t1 = trim_spaces(action_name.substr(0, pos_cmp));
-    t2 = trim_spaces(action_name.substr(pos_cmp+cmp.length(), string::npos));
+    auto cmp = TST_CMP_TOKENS[index_cmp];
+    auto t1 = trim_spaces(action_name.substr(0, pos_cmp));
+    auto t2 = trim_spaces(action_name.substr(pos_cmp+cmp.length(), string::npos));
+
+    return tuple(t1,t2,cmp);
 }
 
 /* Returns pair <variable_name, register> */
@@ -185,8 +186,7 @@ hset<string> build_atmR(const spot::twa_graph_ptr& reg_atm)
 
         if (is_atm_tst(ap_name))
         {
-            string t1,t2,_;
-            parse_tst(ap_name, t1, t2, _);
+            auto [t1,t2,_] = parse_tst(ap_name);
             if (is_reg_name(t1))
                 result.insert(t1);
             if (is_reg_name(t2))
@@ -218,11 +218,11 @@ vector<spot::formula> get_cubes(const spot::formula& f)
 //// TODO: add support for io_tst_atoms
 
 template<typename Container>
-void separate(const Container& cube,
-              set<spot::formula>& APs,
-              set<spot::formula>& cmp_atoms,
-              set<spot::formula>& asgn_atoms)
+tuple<set<spot::formula>, set<spot::formula>, set<spot::formula>>
+separate(const Container& cube)
 {
+    set<spot::formula> APs, cmp_atoms, asgn_atoms;
+
     for (spot::formula f : cube)
     {
         // f is either positive 'a' or negated '!a' or an action
@@ -238,7 +238,10 @@ void separate(const Container& cube,
         else
             APs.insert(f);
     }
+
+    return tuple(APs, cmp_atoms, asgn_atoms);
 }
+
 
 Asgn compute_asgn(const set<spot::formula>& atm_asgn_atoms)
 {
@@ -252,7 +255,7 @@ Asgn compute_asgn(const set<spot::formula>& atm_asgn_atoms)
 }
 
 
-V get_add_vertex(Graph& g, map<V, EC>& v_to_ec, const string& var_name)
+V get_add_vertex(Graph& g, hmap<V, EC>& v_to_ec, const string& var_name)
 {
     for (const auto& v_ec : v_to_ec)
         if (contains(v_ec.second, var_name))
@@ -269,21 +272,13 @@ V get_add_vertex(Graph& g, map<V, EC>& v_to_ec, const string& var_name)
 /* Returns the partial partition constructed from p and atm_tst_atoms (if possible). */
 optional<Partition> compute_partial_p_io(const Partition& p, const set<spot::formula>& atm_tst_atoms)
 {
-    /* Examples:
-       : i<r2                        (incomplete)
-       : r1<i, o<i                   (incomplete)
-       : i=o, i=r1, o<r1             (inconsistent)
-       : r2<i<r1 but p has r1<r2     (inconsistent wrt. p)
-       : r2<i, r1<i and p has r1<r2  (redundant)
-    */
-    Graph g;
-    map<V,EC> v_to_ec;
-    tie(g, v_to_ec) = partition_to_graph(p);
+    // copy
+    Graph g = p.g;
+    hmap<V, EC> v_to_ec = p.v_to_ec;
 
     for (const auto& tst_atom : atm_tst_atoms)
     {
-        string t1, t2, cmp;
-        parse_tst(tst_atom.ap_name(), t1, t2, cmp);
+        auto [t1, t2, cmp] = parse_tst(tst_atom.ap_name());
         MASSERT(cmp != "≥" && cmp != "≤" && cmp != "≠", "should be handled before");
         MASSERT(! (is_reg_name(t1) && is_reg_name(t2)), "not supported");
 
@@ -295,7 +290,7 @@ optional<Partition> compute_partial_p_io(const Partition& p, const set<spot::for
             if (v1 == v2)
                 continue;
 
-            merge_v1_into_v2(g, v1, v2);
+            GA::merge_v1_into_v2(g, v1, v2);
             auto v1_ec = v_to_ec.at(v1);
             v_to_ec.at(v2).insert(v1_ec.begin(), v1_ec.end());
             v_to_ec.erase(v1);
@@ -308,16 +303,15 @@ optional<Partition> compute_partial_p_io(const Partition& p, const set<spot::for
             MASSERT(0, "unreachable: " << cmp);
     }
 
-    if (has_cycles(g))
+    if (GA::has_cycles(g))
         return {};
 
-    auto result = graph_to_partition(g, v_to_ec);
-    return result;
+    return Partition(g, v_to_ec);
 }
 
 Partition compute_succ_partition(const Partition& partition,
-                                 const Tst& i_tst, const Asgn& i_asgn,
-                                 const Tst& o_tst, const Asgn& o_asgn)
+                                 const TstAtom& i_tst, const Asgn& i_asgn,
+                                 const TstAtom& o_tst, const Asgn& o_asgn)
 {
     // TODO
 }
@@ -330,58 +324,32 @@ Partition compute_succ_partition(const Partition& partition,
  */
 bool a_is_ge_b(const string& a, const string& b, const Partition& p, bool treat_empty_as_plus_infinity)
 {
-    if (treat_empty_as_plus_infinity)
-    {
-        if (a.empty()) return true;  // a=∞ or a=b=∞
-        if (b.empty()) return false; // a<∞ and b=∞
-    }
-    else
-    {
-        if (b.empty()) return true;
-        if (a.empty()) return false;
-    }
+    /////if (treat_empty_as_plus_infinity)
+    /////{
+    /////    if (a.empty()) return true;  // a=∞ or a=b=∞
+    /////    if (b.empty()) return false; // a<∞ and b=∞
+    /////}
+    /////else
+    /////{
+    /////    if (b.empty()) return true;
+    /////    if (a.empty()) return false;
+    /////}
 
-    for (const auto& c : p.repr)
-    {
-        if (contains(c, b))  // b appears strictly before a or in the same equivalence class
-            return true;
-        if (contains(c, a))  // a appears strictly before b
-            return false;
-    }
+    /////for (const auto& c : p.repr)
+    /////{
+    /////    if (contains(c, b))  // b appears strictly before a or in the same equivalence class
+    /////        return true;
+    /////    if (contains(c, a))  // a appears strictly before b
+    /////        return false;
+    /////}
 
-    MASSERT(0, "unreachable");
+    /////MASSERT(0, "unreachable");
 }
 
 bool a_is_less_b(const string& a, const string& b, const Partition& p, bool treat_empty_as_plus_infinity)
 {
     return !a_is_ge_b(a, b, p, treat_empty_as_plus_infinity);
 }
-
-//////Tst join_tst(const Tst& atm_tst, const Tst& sys_tst, const Partition& p)
-//////{
-//////    // TODO: revisit to double-check
-//////    // TODO: double-check: the case of TRUE Cmp
-//////    map<string, Cmp> new_tst;
-//////    for (const auto& name_cmp : atm_tst.data_to_cmp)
-//////    {
-//////        auto name = name_cmp.first;
-//////        auto atm_cmp = name_cmp.second;
-//////        auto sys_cmp = sys_tst.data_to_cmp.at(name);
-//////
-//////        if (atm_cmp.is_EQUAL())
-//////            new_tst.insert({name,atm_cmp});
-//////        else if (sys_cmp.is_EQUAL())
-//////            new_tst.insert({name,sys_cmp});
-//////        else // find the tightest bounds
-//////        {
-//////            auto max_rL = a_is_ge_b(sys_cmp.rL, atm_cmp.rL, p, false) ? sys_cmp.rL : atm_cmp.rL;
-//////            auto min_rU = a_is_ge_b(sys_cmp.rU, atm_cmp.rU, p, true)  ? atm_cmp.rU : sys_cmp.rU;
-//////            new_tst.insert({name, Cmp::Between(max_rL, min_rU)});
-//////        }
-//////    }
-//////    return Tst(atm_tst.data_partition, new_tst);
-//////}
-
 
 /*
   Pre-conditions:
@@ -391,77 +359,77 @@ bool a_is_less_b(const string& a, const string& b, const Partition& p, bool trea
   Ensures:
   - each partition in the result set is complete and adheres to tst for i
 */
-set<Partition> compute_all_p_with_i(const Partition& p, const Tst& atm_tst)
+set<Partition> compute_all_p_with_i(const Partition& p, const TstAtom& atm_tst)
 {
-    // check pre-condition |inputs|=1
-    set<string> inputs;
-    for (const auto& var_cmp : atm_tst.data_to_cmp)
-        if (is_input_name(var_cmp.first))
-            inputs.insert(var_cmp.first);
-    MASSERT(inputs.size() == 1, "function pre-condition violation");
+    /////// check pre-condition |inputs|=1
+    /////set<string> inputs;
+    /////for (const auto& var_cmp : atm_tst.data_to_cmp)
+    /////    if (is_input_name(var_cmp.first))
+    /////        inputs.insert(var_cmp.first);
+    /////MASSERT(inputs.size() == 1, "function pre-condition violation");
 
-    string i_name = *inputs.begin();
-    auto i_cmp = atm_tst.data_to_cmp.at(i_name);
-    if (i_cmp.is_EQUAL())
-    {
-        auto p_result = p;  // copy
-        p_result.get_class_of(i_cmp.rU).insert(i_name);
-        return { p_result };
-    }
+    /////string i_name = *inputs.begin();
+    /////auto i_cmp = atm_tst.data_to_cmp.at(i_name);
+    /////if (i_cmp.is_EQUAL())
+    /////{
+    /////    auto p_result = p;  // copy
+    /////    p_result.get_class_of(i_cmp.rU).insert(i_name);
+    /////    return { p_result };
+    /////}
 
-    /*
-      -∞ < r0 < r1 < r2 < r3 < +∞
-           ^    ^    ^    ^
-      Enumeration happens as noted above.
-      For each register, we check two tests:
-      (prev,cur) and [cur].
-      Hence:
-      (-∞,r0) and [r0];  (r0,r1) and [r1];  (r1,r2) and [r2];  (r2,r3), [r3].
-      and after the loop we check (r3,+∞).
-    */
+    //////*
+    /////  -∞ < r0 < r1 < r2 < r3 < +∞
+    /////       ^    ^    ^    ^
+    /////  Enumeration happens as noted above.
+    /////  For each register, we check two tests:
+    /////  (prev,cur) and [cur].
+    /////  Hence:
+    /////  (-∞,r0) and [r0];  (r0,r1) and [r1];  (r1,r2) and [r2];  (r2,r3), [r3].
+    /////  and after the loop we check (r3,+∞).
+    /////*/
 
-    set<Partition> all_p_with_i;
-    for (const auto& ec : p.repr)
-    {
-        auto cur_reg = *(ec.begin());
+    /////set<Partition> all_p_with_i;
+    /////for (const auto& ec : p.repr)
+    /////{
+    /////    auto cur_reg = *(ec.begin());
 
-        // we try two tests: (prev_reg,cur_reg) and [cur_reg]
+    /////    // we try two tests: (prev_reg,cur_reg) and [cur_reg]
 
-        // if (i_cmp.rU < cur_reg)
-        if (a_is_less_b(i_cmp.rU, cur_reg,  p, true))
-            return all_p_with_i;  // we are done
+    /////    // if (i_cmp.rU < cur_reg)
+    /////    if (a_is_less_b(i_cmp.rU, cur_reg,  p, true))
+    /////        return all_p_with_i;  // we are done
 
-        // if (i_cmp.rL ≥ cur_reg)
-        if (a_is_ge_b(i_cmp.rL, cur_reg, p, false))
-            continue;  // didn't reach yet
+    /////    // if (i_cmp.rL ≥ cur_reg)
+    /////    if (a_is_ge_b(i_cmp.rL, cur_reg, p, false))
+    /////        continue;  // didn't reach yet
 
-        // now: i_cmp.rL < cur_reg ≤ i_cmp.rU
+    /////    // now: i_cmp.rL < cur_reg ≤ i_cmp.rU
 
-        // The case [cur_reg]:
-        if (a_is_less_b(cur_reg, i_cmp.rU, p, true))
-        {
-            auto new_p = p;  // copy
-            new_p.get_class_of(cur_reg).insert(i_name);
-            all_p_with_i.insert(new_p);
-        }
+    /////    // The case [cur_reg]:
+    /////    if (a_is_less_b(cur_reg, i_cmp.rU, p, true))
+    /////    {
+    /////        auto new_p = p;  // copy
+    /////        new_p.get_class_of(cur_reg).insert(i_name);
+    /////        all_p_with_i.insert(new_p);
+    /////    }
 
-        // The case (prev_reg, cur_reg):
-        // since rL < cur_reg ≤ rU  and  rL ≤ prev_reg,
-        // we have (prev_reg, cur_reg) ⊆ (rL, rU), hence no if-checks
-        auto new_p = p;
-        auto it_of_cur_ec = find(new_p.repr.begin(), new_p.repr.end(), ec);
-        new_p.repr.insert(it_of_cur_ec, {i_name});  // insert before it_of_cur_ec, creating prev_reg<i<cur_reg
-        all_p_with_i.insert(new_p);
-    }
+    /////    // The case (prev_reg, cur_reg):
+    /////    // since rL < cur_reg ≤ rU  and  rL ≤ prev_reg,
+    /////    // we have (prev_reg, cur_reg) ⊆ (rL, rU), hence no if-checks
+    /////    auto new_p = p;
+    /////    auto it_of_cur_ec = find(new_p.repr.begin(), new_p.repr.end(), ec);
+    /////    new_p.repr.insert(it_of_cur_ec, {i_name});  // insert before it_of_cur_ec, creating prev_reg<i<cur_reg
+    /////    all_p_with_i.insert(new_p);
+    /////}
 
-    if (i_cmp.rU.empty())    // if unrestricted from above
-    {                        // then put i as the last element of p
-        auto new_p = p;
-        new_p.repr.push_back({i_name});
-        all_p_with_i.insert(new_p);
-    }
+    /////if (i_cmp.rU.empty())    // if unrestricted from above
+    /////{                        // then put i as the last element of p
+    /////    auto new_p = p;
+    /////    new_p.repr.push_back({i_name});
+    /////    all_p_with_i.insert(new_p);
+    /////}
 
-    return all_p_with_i;
+    /////return all_p_with_i;
 }
 
 Partition build_init_partition(const hset<string>& sysR, const hset<string>& atmR)
@@ -501,21 +469,21 @@ void sdf::reduce(const spot::twa_graph_ptr& reg_ucw, uint nof_sys_regs,
     auto r_init = reg_ucw->get_init_state_number();
     auto c_init = classical_ucw->new_state();
 
-    hmap<uint, pair<uint, Partition>> c_to_rp;  // 'classical state' to (reg-atm state, partition)
-    c_to_rp.insert(make_pair(c_init, make_pair(r_init, build_init_partition(sysR, atmR))));
+    hmap<uint, pair<uint, Partition>> c_to_qp;  // 'classical state' to (reg-atm state, partition)
+    c_to_qp.insert(make_pair(c_init, make_pair(r_init, build_init_partition(sysR, atmR))));
 
     set<uint> c_todo;
     c_todo.insert(c_init);
-    hset<pair<uint, Partition>,pair_hash> processed;
+    hset<pair<uint, Partition>,pair_hash> qp_processed;
 
     // main loop
     while (!c_todo.empty())
     {
-        auto c = pop(c_todo);
-        auto [r,p] = c_to_rp.at(c);
-        processed.insert({r, p});
+        auto c = pop_first(c_todo);
+        auto [q,p] = c_to_qp.at(c);
+        qp_processed.insert({q, p});
 
-        for (const auto& t: reg_ucw->out(r))
+        for (const auto& t: reg_ucw->out(q))
         {
             cout << t.src << " -" << t.cond << "-> " << t.dst << endl;
             auto t_f = spot::bdd_to_formula(t.cond, reg_ucw->get_dict());
@@ -532,26 +500,28 @@ void sdf::reduce(const spot::twa_graph_ptr& reg_ucw, uint nof_sys_regs,
                 //       The assumption on the completeness of the partitions simplifies the algorithm.
 
 
-                /*  The algorithm is as follows:
+                /*  The algorithm:
 
-                    let partial_p_i = compute_partial_p_io(p, atm_tst_atoms)
-                    let all_p_io = compute_all_p_io(partial_p_io)             // <--- HERE: it should be possible to incorporate here sys_asgn, out_r enumeration as well!
+                    let partial_p_io = compute_partial_p_io(p, atm_tst_atoms)
+                    let all_p_io = compute_all_p_io(partial_p_io)             // <-- (should be possible to incorporate here sys_asgn-out_r enumeration)
                     for every p_io in all_p_io:
                         for every sys_asgn:
                             let p_io' = update(p_io, sys_asgn)                // update Rs
-                            let all_p_i_outr = compute_all_p_i_outr(p_io')
-                            for every  p_i_outr  in  all_p_i_outr:
-                                let p_i_outr' = update(p_i_outr, atm_asgn)    // update Ra
-                                let p_succ = remove i and o from p_i_outr'
-                                if (q_succ, p_succ) not in processed:
+                            let all_p_io_r = compute_all_p_io_r(p_io')
+                            for every p_io_r in all_p_io_r:
+                                let p_io_r' = update(p_io_r, atm_asgn)        // update Ra
+                                let p_succ = remove i and o from p_io_r'
+                                if (q_succ, p_succ) not in qp_processed:
                                     add (q_succ, p_succ) to c_todo
                 */
 
-                set<spot::formula> APs, atm_cmp_atoms, atm_asgn_atoms;
-                separate(cube, APs, atm_cmp_atoms, atm_asgn_atoms);
+                auto [APs, atm_cmp_atoms, atm_asgn_atoms] = separate(cube);
                 auto atm_asgn = compute_asgn(atm_asgn_atoms);
                 auto partial_p_i = compute_partial_p_io(p, atm_cmp_atoms);  // TODO: ensure cmp OP is one of <,>,= (but not ≠ ≤ ≥)
-                // todo
+                // todo: CURRENT: (i've finished implementing the graph algorithms)
+                // todo: TEST the function compute_partial_p_io
+
+                // T0D0: after writing compute_all_p_io, check how to incorporate there enumeration of sys_asgn-out_r
             }
         }
     }
@@ -561,17 +531,17 @@ void sdf::tmp()
 {
     // TODO: test join_tst
 
-    Partition p = Partition({{"r1"}, {"r2"}, {"r3"}, {"r4"}, {"r5"}, {"r6"}, {"r7"}});
+    /////////Partition p = Partition({{"r1"}, {"r2"}, {"r3"}, {"r4"}, {"r5"}, {"r6"}, {"r7"}});
 
-    auto atm_tst = Tst(Partition({{"i"}, {"o"}}),
-                       { {"i", Cmp::Above("r2")} });
+    /////////auto atm_tst = TstAtom(Partition({{"i"}, {"o"}}),
+    /////////                       { {"i", Cmp::Above("r2")} });
 
-    cout << p << endl;
-    cout << atm_tst << endl;
-    cout << "------" << endl;
-    auto all_p_with_i = compute_all_p_with_i(p, atm_tst);
-    for (auto p : all_p_with_i)
-        cout << p << endl;
+    /////////cout << p << endl;
+    /////////cout << atm_tst << endl;
+    /////////cout << "------" << endl;
+    /////////auto all_p_with_i = compute_all_p_with_i(p, atm_tst);
+    /////////for (auto p : all_p_with_i)
+    /////////    cout << p << endl;
 
 //    Cmp c1 = Cmp::Equal("ra");
 //    Cmp c2 = Cmp::Below("ra");

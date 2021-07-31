@@ -15,6 +15,9 @@ target_link_libraries(test_synt "${SDF_LIB_NAME}" "${LIBS}" gtest gtest_main)
 add_executable(test_reg_translator test_reg_translator.cpp)
 target_link_libraries(test_reg_translator "${SDF_LIB_NAME}" "${LIBS}" gtest gtest_main)
 
+add_executable(test_graph test_graph.cpp)
+target_link_libraries(test_graph "${SDF_LIB_NAME}" "${LIBS}" gtest gtest_main)
+
 file(COPY ./specs DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 
 # for some reason this command does not work for me

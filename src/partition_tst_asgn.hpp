@@ -18,7 +18,7 @@
 
 namespace sdf
 {
-struct Tst;
+struct TstAtom;
 struct Asgn;
 struct Partition;
 }
@@ -27,13 +27,13 @@ struct Partition;
 namespace sdf
 {
 using EC = std::unordered_set<std::string>;
-using V = uint;
-using Graph = graph::Graph<V>;
+using Graph = graph::Graph;
+using V = Graph::V;
 
 // TODO: fix visibility (struct or class?)
 
 /*
- * A partition is a graph, where v1 -> v2 means "v1>v2".
+ * Partition is a graph, where v1 -> v2 means "v1>v2".
  * Each vertex describes an equivalence class, using v_to_ec mapping.
  */
 struct Partition
@@ -57,38 +57,38 @@ private:
    size_t calc_hash() const;
 };
 
-/* Tst has the form a ◁ b where ◁ in {<,≤,=,≠} */
-struct Tst
+/* TstAtom has the form a ◁ b where ◁ in {<,≤,=,≠} */
+struct TstAtom
 {
     const std::string t1, t2, cmp;
 
     /* Construct the test (change ≥ to ≤ if necessary) */
-    static Tst constructTst(const std::string& t1, const std::string& t2, const std::string& cmp)
+    static TstAtom constructTst(const std::string& t1, const std::string& t2, const std::string& cmp)
     {
         if (cmp == ">")
-            return Tst(t2, t1, "<");
+            return TstAtom(t2, t1, "<");
 
         if (cmp == "≥")
-            return Tst(t2, t1, "≤");
+            return TstAtom(t2, t1, "≤");
 
         if (cmp == "<" or cmp == "≤")
-            return Tst(t1, t2, cmp);
+            return TstAtom(t1, t2, cmp);
 
         // = or ≠
-        return Tst(min(t1, t2), max(t1, t2), cmp);
+        return TstAtom(min(t1, t2), max(t1, t2), cmp);
     }
 
      // Useful for hash containers:
-     bool operator==(const Tst& rhs) const { return std::tie(t1, t2, cmp) == std::tie(rhs.t1, rhs.t2, rhs.cmp); }
-     bool operator!=(const Tst& rhs) const { return !(rhs == *this); }
+     bool operator==(const TstAtom& rhs) const { return std::tie(t1, t2, cmp) == std::tie(rhs.t1, rhs.t2, rhs.cmp); }
+     bool operator!=(const TstAtom& rhs) const { return !(rhs == *this); }
 
-    friend struct std::hash<Tst>;
-    friend std::ostream& operator<<(std::ostream& out, const Tst& tst) { return out << tst.t1 << tst.cmp << tst.t2; }
+    friend struct std::hash<TstAtom>;
+    friend std::ostream& operator<<(std::ostream& out, const TstAtom& tst) { return out << tst.t1 << tst.cmp << tst.t2; }
 
 private:
     const size_t hash_;
 
-    explicit Tst(const std::string& t1, const std::string& t2, const std::string& cmp): t1(t1), t2(t2), cmp(cmp), hash_(calc_hash())
+    explicit TstAtom(const std::string& t1, const std::string& t2, const std::string& cmp): t1(t1), t2(t2), cmp(cmp), hash_(calc_hash())
     {
         MASSERT(t1 != t2, "probably bug");
         std::set<std::string> allowed_cmp = {"<", "=", "≠", "≤"};
@@ -106,13 +106,13 @@ private:
 /* Mapping : Var->SetOfReg  describing where to store a value of given variable. */
 struct Asgn
 {
-    const std::unordered_map<std::string, std::unordered_set<std::string>> asgn;  // d is stored into r1,r2,...
+    const std::unordered_map<std::string, std::unordered_set<std::string>> asgn;  // d is stored into {r1,r2,...}
 
     explicit Asgn(const std::unordered_map<std::string, std::unordered_set<std::string>>& asgn): asgn(asgn) { }
 
-    // Useful for hash containers:
-    bool operator==(const Asgn& rhs) const { return asgn == rhs.asgn; }
-    bool operator!=(const Asgn& rhs) const { return !(rhs == *this); }
+    // Useful for hash containers: TODO: no need?
+//    bool operator==(const Asgn& rhs) const { return asgn == rhs.asgn; }
+//    bool operator!=(const Asgn& rhs) const { return !(rhs == *this); }
 
     friend std::ostream& operator<<(std::ostream& os, const Asgn& asgn_);
 };
@@ -122,7 +122,7 @@ struct Asgn
 namespace std
 {
 template<> struct hash<sdf::Partition> { size_t operator()(const sdf::Partition& p) const { return p.hash_; } };
-template<> struct hash<sdf::Tst>       { size_t operator()(const sdf::Tst& tst) const     { return tst.hash_; } };
+template<> struct hash<sdf::TstAtom>       { size_t operator()(const sdf::TstAtom& tst) const     { return tst.hash_; } };
 //template<> struct hash<sdf::Asgn>;
 }
 

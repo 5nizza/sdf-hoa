@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cctype>
 #include <locale>
+#include <unordered_set>
 #include "my_assert.hpp"
 
 
@@ -189,14 +190,16 @@ std::vector<T> range(const T &min, const T &max_excluded)  // T to be able to us
 }
 
 
-template<typename E>
-E pop(std::set<E>& container)
+template<typename Container, typename E>
+E pop_first(Container& container)
 {
     auto it = container.begin();
-    E elem = *it;
     container.erase(it);
-    return elem;
+    return *it;
 }
+
+template<typename E>
+E pop_first(std::set<E>& container) { return pop_first<std::set<E>, E>(container); }
 
 
 inline

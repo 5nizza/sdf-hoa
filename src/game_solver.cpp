@@ -721,7 +721,7 @@ void sdf::GameSolver::model_to_aiger()
     set<uint> processed;
     while (!cuddIdxStatesUsed.empty())
     {
-        uint stateAsCuddIdx = pop(cuddIdxStatesUsed);
+        uint stateAsCuddIdx = pop_first(cuddIdxStatesUsed);
         set<uint> new_to_process;
         uint aigerLit = aiger_by_cudd[stateAsCuddIdx];
         uint aigerLitNext = walk(pre_trans_func[stateAsCuddIdx].getNode(), new_to_process);

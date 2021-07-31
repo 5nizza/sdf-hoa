@@ -1,156 +1,113 @@
 /**
  * Inspired by https://github.com/childsish/graph by Liam Childs (liam.h.childs@gmail.com)
- *
- * Modified to fit my project.
+ * but overhauled to fit my project.
  */
 #pragma once
 
 #include <stack>
 #include <unordered_map>
 #include <unordered_set>
+#include <iostream>  // for cerr in assertions
 
 
 namespace graph
 {
 
-template<typename V>
 class Graph
 {
 public:
+    typedef uint V;
     Graph() = default;
 
     /**
-     * Add a connection between from and to.
-     * add_edge automatically creates any missing vertices.
+     * Add a connection between from src and to dst.
+     * Automatically create any missing vertices.
      */
-    void add_edge(const V& from, const V& to)
+    void add_edge(const V& src, const V& dst)
     {
-        add_vertex(from);
-        add_vertex(to);
-        _edges[from].children.insert(to);
-        _edges[to].parents.insert(from);
+        // (no need to call `add_vertex` -- the operator [] adds them)
+        _edges_by_v[src].children.insert(dst);
+        _edges_by_v[dst].parents.insert(src);
     }
 
-    /**
-     * Add a vertex, if not yet present, otherwise do nothing.
-     */
+    /** Fails if either:
+     *  - src or dst does not exist, or
+     *  - src -> dst  does not exist.
+     *  (note: doesn't remove any vertices) */
+    void remove_edge(const V& src, const V& dst)
+    {
+        auto result = _edges_by_v.at(src).children.erase(dst) == 1 and
+                      _edges_by_v.at(dst).parents.erase(src) == 1;
+
+        if (not result)
+        {
+            std::cerr << __FILE__ << " (" << __LINE__ << ") : " << "the edge does not exist: " << src << " -> " << dst << std::endl;
+            abort();
+        }
+    }
+
+    /** Add a vertex (fails, if the vertex is already present). */
     void add_vertex(const V& vertex)
     {
-        if (_edges.find(vertex) == _edges.end())
-            _edges.emplace(vertex, VData{});
+        auto [it, result] = _edges_by_v.emplace(vertex, VData{});
+        if (not result)
+        {
+            std::cerr << __FILE__ << " (" << __LINE__ << ") : " << "the vertex already exists: " << vertex << std::endl;
+            abort();
+        }
     }
 
-    /**
-     * Get children of given vertex.
-     */
+    /** Remove the vertex and all its edges (fails if the vertex doesn't exist). */
+    void remove_vertex(const V& v)
+    {
+        // unregister v from the parents of v_children and from the children of parents_v
+
+        for (auto p_v : _edges_by_v.at(v).parents)
+        {
+            if (p_v == v) continue;  // no need to modify the parents/children of the v itself
+            _edges_by_v.at(p_v).children.erase(v);
+        }
+
+        for (auto v_c : _edges_by_v.at(v).children)
+        {
+            if (v_c == v) continue;
+            _edges_by_v.at(v_c).parents.erase(v);
+        }
+
+        _edges_by_v.erase(v);
+    }
+
     std::unordered_set<V> get_children(const V& vertex) const
     {
         std::unordered_set<V> children;
-        if (_edges.find(vertex) == _edges.end())
+        if (_edges_by_v.find(vertex) == _edges_by_v.end())
             return children;
 
-        return _edges.at(vertex).children;
+        return _edges_by_v.at(vertex).children;
     }
 
-    /**
-     * Get parents of given vertex.
-     */
     std::unordered_set<V> get_parents(const V& vertex) const
     {
         std::unordered_set<V> parents;
-        if (_edges.find(vertex) == _edges.end())
+        if (_edges_by_v.find(vertex) == _edges_by_v.end())
             return parents;
 
-        return _edges.at(vertex).parents;
-    }
-
-    /**
-     * Get descendants of given vertex.
-     */
-    std::unordered_set<V> get_descendants(const V& vertex) const
-    {
-        std::unordered_set<V> descendents;
-        if (_edges.find(vertex) == _edges.end())
-            return descendents;
-
-        std::unordered_set<V> visited;
-        std::stack<V> stack;
-        visited.insert(vertex);
-        for (auto child : _edges.at(vertex).children)
-            stack.push(child);
-
-        while (stack.size() > 0)
-        {
-            auto top = stack.top();
-            stack.pop();
-
-            if (visited.find(top) != visited.end())
-                continue;
-
-            visited.insert(top);
-            descendents.insert(top);
-            for (const auto& child : _edges.at(top).children)
-                stack.push(child);
-        }
-        return descendents;
-    }
-
-    /**
-     * Get ancestors of given vertex.
-     */
-    std::unordered_set<V> get_ancestors(const V& vertex) const
-    {
-        std::unordered_set<V> ancestors;
-        if (_edges.find(vertex) == _edges.end())
-            return ancestors;
-
-        std::unordered_set<V> visited;
-        std::stack<V> stack;
-        visited.insert(vertex);
-        for (auto parent : _edges.at(vertex).parents)
-            stack.push(parent);
-
-        while (stack.size() > 0)
-        {
-            auto top = stack.top();
-            stack.pop();
-            if (visited.find(top) != visited.end())
-                continue;
-
-            visited.insert(top);
-            ancestors.insert(top);
-            for (const auto& parent : _edges.at(top).parents)
-                stack.push(parent);
-        }
-        return ancestors;
+        return _edges_by_v.at(vertex).parents;
     }
 
     std::unordered_set<V> get_vertices() const
     {
         std::unordered_set<V> vertices;
-        for (const auto& e : _edges)
+        for (const auto& e : _edges_by_v)
             vertices.insert(e.first);
         return vertices;
     }
 
-    /**
-     * Join graph with another graph.
-     * *union* is a keyword, so an underscore has been added.
-     * @param that graph to join with
-     */
-    void union_(const Graph& that)
-    {
-        for (const auto& item : that._edges)
-        {
-            add_vertex(item.first);
-            for (const auto& child : item.second.children)
-                add_edge(item.first, child);
-        }
-    }
-
-    /** Note: these only compare verbatim (not a 'graph isomorphism'). */
-    bool operator==(const Graph& rhs) const { return _edges == rhs._edges; }
+    /** Note: these only compare verbatim (no 'graph isomorphism'). */
+    bool operator==(const Graph& rhs) const { return _edges_by_v == rhs._edges_by_v; }
     bool operator!=(const Graph& rhs) const { return !(rhs == *this); }
+
+    friend struct GraphAlgo;
 
 private:
     struct VData
@@ -160,32 +117,10 @@ private:
 
         bool operator==(const VData& rhs) const { return parents == rhs.parents && children == rhs.children; }
         bool operator!=(const VData& rhs) const { return !(rhs == *this); }
-
-        // used for hash function only!
-        size_t operator()() const
-        {
-            size_t hash_value = 17;
-            hash_value = 31*hash_value + std::hash<std::unordered_set<V>>()(parents);
-            hash_value = 31*hash_value + std::hash<std::unordered_set<V>>()(children);
-            // ... and so on
-            return hash_value;
-        }
     };
 
-    std::unordered_map<V, VData> _edges;
+    std::unordered_map<V, VData> _edges_by_v;
+
 };
 
 }
-
-//namespace std
-//{
-//
-//template<typename V> struct hash<graph::Graph<V>>
-//{
-//    size_t operator()(const graph::Graph<V>& g) const
-//    {
-//        return std::hash<std::unordered_map<V,typename graph::Graph<V>::VData>>()(g.edges);
-//    }
-//};
-//
-//}

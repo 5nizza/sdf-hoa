@@ -1,8 +1,5 @@
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "cert-err58-cpp"
-//
-// Created by ayrat on 23/06/18.
-//
 
 #include <string>
 #include <utility>
