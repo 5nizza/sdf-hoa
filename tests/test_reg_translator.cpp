@@ -12,14 +12,17 @@
 using namespace std;
 using namespace sdf;
 
-// TODO : add tests for Partition
+// TODO: add tests for Partition
+// TODO: add tests for compute_partial_p_io
 
 /*
+
 struct Partition1: public testing::Test
 {
     Partition p = Partition({{"r1"}, {"r2"}, {"r3"}});
 };
-TEST_F(Partition1, ComputeNext)
+
+TEST_F(Partition1, compute_partial_p_io)
 {
     {
         cout << "-------------" << endl;
@@ -82,6 +85,7 @@ TEST_F(Partition1, ComputeNext)
     }
 }
 
+
 struct Partition2: public testing::Test { Partition p = Partition({{"r1", "r2", "r3"}}); };
 TEST_F(Partition2, ComputeNext)
 {
@@ -109,6 +113,7 @@ TEST_F(Partition2, ComputeNext)
                   "r1<r2=r3");
     }
 }
+*/
 
 
 int main(int argc, char** argv)
@@ -116,6 +121,6 @@ int main(int argc, char** argv)
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
-*/
+
 
 #pragma clang diagnostic pop

@@ -6,6 +6,9 @@
 #include "graph.hpp"
 #include "graph_algo.hpp"
 
+// for tests in tmp()
+#include <spot/tl/parse.hh>
+
 
 #define BDD spotBDD
     #include <spot/twaalgos/dot.hh>
@@ -16,6 +19,8 @@
 using namespace std;
 using namespace sdf;
 using GA = graph::GraphAlgo;
+using formula = spot::formula;
+using twa_graph_ptr = spot::twa_graph_ptr;
 
 
 #define DEBUG(message) {spdlog::get("console")->debug() << message;}  // NOLINT(bugprone-macro-parentheses)
@@ -25,6 +30,9 @@ using GA = graph::GraphAlgo;
 #define hset unordered_set
 
 static const string TST_CMP_TOKENS[] = {"=","≠","<",">","≤","≥"};  // NOLINT
+
+static const string IN = "in";    // NOLINT
+static const string OUT = "out";  // NOLINT
 
 /*
  * A test atom has the form:
@@ -41,26 +49,6 @@ bool is_atm_tst(const string& name)
     return false;
 }
 
-bool is_i_atm_tst(const string& name)
-{
-    return is_atm_tst(name) &&
-           name.find("in") != string::npos &&
-           name.find("out") == string::npos;
-}
-
-bool is_o_atm_tst(const string& name)
-{
-    return is_atm_tst(name) &&
-           name.find("in") == string::npos &&
-           name.find("out") != string::npos;
-}
-
-bool is_io_atm_tst(const string& name)
-{
-    return is_atm_tst(name) &&
-           name.find("in") != string::npos &&
-           name.find("out") != string::npos;
-}
 
 /* Assignments have form in↓rX | out↓rX */
 bool is_atm_asgn(const string& name)
@@ -68,65 +56,66 @@ bool is_atm_asgn(const string& name)
     return name.find("↓") != string::npos;
 }
 
-bool is_i_atm_asgn(const string& name)
-{
-    return is_atm_asgn(name) &&
-           name.find("in") != string::npos;
-}
 
-bool is_o_atm_asgn(const string& name)
-{
-    return is_atm_asgn(name) &&
-           name.find("out") != string::npos;
-}
-
-
-set<spot::formula> get_non_actionAPs_from(const spot::twa_graph_ptr& reg_atm)
-{
-    set<spot::formula> non_regAPs;
-    for (const auto& ap : reg_atm->ap())
-        if (!is_atm_tst(ap.ap_name()) and !is_atm_asgn(ap.ap_name()))
-            non_regAPs.insert(ap);
-    return non_regAPs;
-}
-
-
-// TODO: assumes one data input and one data output
+// ASSUMPTION: one data input and one data output
 // APs naming convention for system tst/asgn/R
-spot::formula ctor_sys_tst_greater_r(const string& r) { return spot::formula::ap("*>" + r); }
-spot::formula ctor_sys_tst_smaller_r(const string& r) { return spot::formula::ap("*<" + r); }
-spot::formula ctor_sys_tst_equal_r(const string& r)   { return spot::formula::ap("*=" + r); }
-spot::formula ctor_sys_asgn_r(const string& r)        { return spot::formula::ap("↓" + r); }
-spot::formula ctor_sys_out_r(const string& r)         { return spot::formula::ap("↑" + r); }
+formula ctor_sys_tst_inp_smaller_r(const string& r) { return formula::ap(IN + "<" + r); }
+formula ctor_sys_tst_inp_equal_r(const string& r)   { return formula::ap(IN + "=" + r); }
+formula ctor_sys_asgn_r(const string& r)        { return formula::ap(IN + "↓" + r); }
+formula ctor_sys_out_r(const string& r)         { return formula::ap("↑" + r); }
 
 
+/**
+The encoding is:
+
+- system tests:
+  for each register r, we introduce two Boolean variables, in<r and in=r.
+  - the atm construction must ensure there are no transitions labeled in<r & in=r,
+  - all other combinations are possible:
+       in<r & !(in=r) encodes "*<r",
+    !(in<r) & !(in=r) encodes "*>r",
+    !(in<r) & in=r    encodes "*=r".
+
+- system assignments:
+  for each register r, introduce a Boolean variable in↓r
+
+- system outputs:
+  for each register, introduce a Boolean variable ↑r, and
+  ensure that having ↑r1 & ↑r2 leads to a rejecting sink.
+*/
 void introduce_sysActionAPs(const hset<string>& sysR,
-                            spot::twa_graph_ptr& classical_ucw,
-                            set<spot::formula>& sysTst,
-                            set<spot::formula>& sysAsgn,
-                            set<spot::formula>& sysOutR)
+                            twa_graph_ptr classical_ucw, // NOLINT
+                            set<formula>& sysTst,
+                            set<formula>& sysAsgn,
+                            set<formula>& sysOutR)
 {
     // create variables for sysTst, sysAsgn, R
     for (const auto& r : sysR)
     {
-        // sysTst variables for register r (TODO: exactly one of them must hold)
+        // sysTst variables for register r
+        classical_ucw->register_ap(ctor_sys_tst_inp_smaller_r(r));
+        classical_ucw->register_ap(ctor_sys_tst_inp_equal_r(r));
 
-        classical_ucw->register_ap(ctor_sys_tst_greater_r(r));
-        classical_ucw->register_ap(ctor_sys_tst_smaller_r(r));
-        classical_ucw->register_ap(ctor_sys_tst_equal_r(r));
-
-        sysTst.insert(ctor_sys_tst_greater_r(r));
-        sysTst.insert(ctor_sys_tst_equal_r(r));
-        sysTst.insert(ctor_sys_tst_smaller_r(r));
+        sysTst.insert(ctor_sys_tst_inp_equal_r(r));
+        sysTst.insert(ctor_sys_tst_inp_smaller_r(r));
 
         // sysAsgn
         classical_ucw->register_ap(ctor_sys_asgn_r(r));
         sysAsgn.insert(ctor_sys_asgn_r(r));
 
-        // vars to output r in R: introduce |R| many of vars, later require MUTEXCL (TODO: MUTEXCL)
+        // vars to output r in R: unary encoding: introduce |R| many of vars, then require MUTEXCL
         classical_ucw->register_ap(ctor_sys_out_r(r));
         sysOutR.insert(ctor_sys_out_r(r));
     }
+}
+
+void introduce_labelAPs(const twa_graph_ptr old_ucw,  // NOLINT
+                        twa_graph_ptr new_ucw         // NOLINT
+                        )
+{
+    for (const auto& ap : old_ucw->ap())
+        if (!is_atm_tst(ap.ap_name()) && !is_atm_asgn(ap.ap_name()))
+            new_ucw->register_ap(ap);
 }
 
 
@@ -139,7 +128,8 @@ hset<string> build_sysR(uint nof_sys_regs)
 }
 
 
-bool is_input_name(const string& name) { return name[0] == 'i'; }
+bool is_input_name(const string& name) { return name.substr(0,2) == IN; }
+bool is_output_name(const string& name) { return name.substr(0,3) == OUT; }
 bool is_reg_name(const string& name) { return name[0] == 'r'; }
 
 
@@ -159,7 +149,7 @@ parse_tst(const string& action_name)
     auto t1 = trim_spaces(action_name.substr(0, pos_cmp));
     auto t2 = trim_spaces(action_name.substr(pos_cmp+cmp.length(), string::npos));
 
-    return tuple(t1,t2,cmp);
+    return {t1,t2,cmp};
 }
 
 /* Returns pair <variable_name, register> */
@@ -171,10 +161,10 @@ pair<string, string> parse_asgn_atom(const string& asgn_atom)
     auto var_name = trim_spaces(trimmed_action_name.substr(0, i));
     auto reg = trim_spaces(trimmed_action_name.substr(i + string("↓").length(), string::npos));
     MASSERT(reg[0] == 'r', reg);
-    return make_pair(var_name, reg);
+    return {var_name, reg};
 }
 
-hset<string> build_atmR(const spot::twa_graph_ptr& reg_atm)
+hset<string> build_atmR(const twa_graph_ptr& reg_atm)
 {
     hset<string> result;
     for (const auto& ap : reg_atm->ap())
@@ -199,67 +189,86 @@ hset<string> build_atmR(const spot::twa_graph_ptr& reg_atm)
 }
 
 
-// assumes that f is in DNF (also not tt nor ff)
-vector<spot::formula> get_cubes(const spot::formula& f)
+// Assumes that f is in DNF.
+// NB: if f = True returns a single cube `True`
+vector<formula> get_cubes(const formula& f)
 {
+    if (f.is_tt())
+        return {f};
+
     MASSERT(!f.is_ff() && !f.is_tt(), f);
 
-    if (f.is(spot::op::And))
+    if (f.is(spot::op::And) or f.is(spot::op::ap) or f.is(spot::op::Not))
         return { f };
 
     MASSERT(f.is(spot::op::Or), f);
 
-    vector<spot::formula> cubes;
-    for (auto it = f.begin(); it != f.end(); ++it)
-        cubes.push_back(*it);
+    vector<formula> cubes;
+    for (const auto& it : f)
+        cubes.push_back(it);
     return cubes;
 }
 
-//// TODO: add support for io_tst_atoms
 
-template<typename Container>
-tuple<set<spot::formula>, set<spot::formula>, set<spot::formula>>
-separate(const Container& cube)
+void classify_literal(formula f,
+                      hset<formula>& APs,
+                      hset<formula>& cmp_atoms,
+                      hset<formula>& asgn_atoms)
 {
-    set<spot::formula> APs, cmp_atoms, asgn_atoms;
-
-    for (spot::formula f : cube)
+    MASSERT(f.is_literal(), f);
+    if (f.is(spot::op::Not))
     {
-        // f is either positive 'a' or negated '!a' or an action
-        if (f.is(spot::op::Not))
-            f = f.get_child_of(spot::op::Not);
-
-        MASSERT(f.is(spot::op::ap), f);
-
-        if (is_atm_tst(f.ap_name()))
-            cmp_atoms.insert(f);
-        else if (is_atm_asgn(f.ap_name()))
-            asgn_atoms.insert(f);
-        else
-            APs.insert(f);
+        auto a_name = f.get_child_of(spot::op::Not).ap_name();
+        MASSERT(!is_atm_tst(a_name) and !is_atm_asgn(a_name),
+                "negated actions not allowed (negated APs are OK): " << f);
+        APs.insert(f);
+        return;
     }
 
-    return tuple(APs, cmp_atoms, asgn_atoms);
+    if (is_atm_tst(f.ap_name()))
+        cmp_atoms.insert(f);
+    else if (is_atm_asgn(f.ap_name()))
+        asgn_atoms.insert(f);
+    else
+        APs.insert(f);
+}
+
+/* @return finite-alphabet APs, cmp_atoms, asgn_atoms */
+tuple<hset<formula>, hset<formula>, hset<formula>>
+separate(formula cube)
+{
+    if (cube.is_tt())
+        return {{}, {}, {}};
+
+    hset<formula> APs, cmp_atoms, asgn_atoms;
+
+    if (cube.is_literal())
+        classify_literal(cube, APs, cmp_atoms, asgn_atoms);
+    else
+        for (formula f : cube)
+            classify_literal(f, APs, cmp_atoms, asgn_atoms);
+
+    return {APs, cmp_atoms, asgn_atoms};
 }
 
 
-Asgn compute_asgn(const set<spot::formula>& atm_asgn_atoms)
+template<typename Container>
+Asgn compute_asgn(const Container& atm_asgn_atoms)
 {
     hmap<string, hset<string>> asgn_data;  // e.g.: { i -> {r1,r2}, o -> {r3,r4} }
     for (const auto& atom : atm_asgn_atoms)
     {
-        auto var_reg = parse_asgn_atom(atom.ap_name());
-        asgn_data[var_reg.first].insert(var_reg.second);
+        auto [var, reg] = parse_asgn_atom(atom.ap_name());
+        asgn_data[var].insert(reg);
     }
     return Asgn(asgn_data);
 }
 
 
-V get_add_vertex(Graph& g, hmap<V, EC>& v_to_ec, const string& var_name)
+V add_vertex(Graph& g, hmap<V, EC>& v_to_ec, const string& var_name)
 {
     for (const auto& v_ec : v_to_ec)
-        if (contains(v_ec.second, var_name))
-            return v_ec.first;
+        MASSERT(!v_ec.second.count(var_name), "the vertex is already present: " << var_name);
 
     auto vertices = g.get_vertices();
     auto new_v = vertices.empty()? 0 : 1 + *max_element(vertices.begin(), vertices.end());
@@ -269,12 +278,34 @@ V get_add_vertex(Graph& g, hmap<V, EC>& v_to_ec, const string& var_name)
 }
 
 
-/* Returns the partial partition constructed from p and atm_tst_atoms (if possible). */
-optional<Partition> compute_partial_p_io(const Partition& p, const set<spot::formula>& atm_tst_atoms)
+V get_vertex_of(const string& var,
+                const Graph& g,
+                const hmap<V,EC>& v_to_ec)
+{
+    for (const auto& v : g.get_vertices())
+        if (v_to_ec.at(v).count(var))
+            return v;
+
+    MASSERT(0,
+            "not possible: var: " << var << ", v_to_ec: " <<
+                                  join(", ", v_to_ec,
+                                       [](const auto& v_ec)
+                                       {
+                                           return to_string(v_ec.first) + " -> {" + join(",", v_ec.second) + "}";
+                                       }));
+}
+
+
+/* Returns the partial partition constructed from p and atm_tst_atoms (if possible).
+ * Assumes atm_tst_atoms are of the form "<" or "=", or the test is True, but not "≤" nor "≠".  */
+optional<Partition> compute_partial_p_io(const Partition& p, const hset<formula>& atm_tst_atoms)
 {
     // copy
     Graph g = p.g;
     hmap<V, EC> v_to_ec = p.v_to_ec;
+
+    add_vertex(g, v_to_ec, IN);
+    add_vertex(g, v_to_ec, OUT);
 
     for (const auto& tst_atom : atm_tst_atoms)
     {
@@ -282,8 +313,8 @@ optional<Partition> compute_partial_p_io(const Partition& p, const set<spot::for
         MASSERT(cmp != "≥" && cmp != "≤" && cmp != "≠", "should be handled before");
         MASSERT(! (is_reg_name(t1) && is_reg_name(t2)), "not supported");
 
-        auto v1 = get_add_vertex(g, v_to_ec, t1),
-             v2 = get_add_vertex(g, v_to_ec, t2);
+        auto v1 = get_vertex_of(t1, g, v_to_ec),
+             v2 = get_vertex_of(t2, g, v_to_ec);
 
         if (cmp == "=")
         {
@@ -309,247 +340,566 @@ optional<Partition> compute_partial_p_io(const Partition& p, const set<spot::for
     return Partition(g, v_to_ec);
 }
 
-Partition compute_succ_partition(const Partition& partition,
-                                 const TstAtom& i_tst, const Asgn& i_asgn,
-                                 const TstAtom& o_tst, const Asgn& o_asgn)
-{
-    // TODO
-}
-
-
-/*
- * Compare two bounds. Both a and b can be empty, meaning:
- *   +∞  if treat_empty_as_plus_infinity is true
- *   -∞  when it is false
- */
-bool a_is_ge_b(const string& a, const string& b, const Partition& p, bool treat_empty_as_plus_infinity)
-{
-    /////if (treat_empty_as_plus_infinity)
-    /////{
-    /////    if (a.empty()) return true;  // a=∞ or a=b=∞
-    /////    if (b.empty()) return false; // a<∞ and b=∞
-    /////}
-    /////else
-    /////{
-    /////    if (b.empty()) return true;
-    /////    if (a.empty()) return false;
-    /////}
-
-    /////for (const auto& c : p.repr)
-    /////{
-    /////    if (contains(c, b))  // b appears strictly before a or in the same equivalence class
-    /////        return true;
-    /////    if (contains(c, a))  // a appears strictly before b
-    /////        return false;
-    /////}
-
-    /////MASSERT(0, "unreachable");
-}
-
-bool a_is_less_b(const string& a, const string& b, const Partition& p, bool treat_empty_as_plus_infinity)
-{
-    return !a_is_ge_b(a, b, p, treat_empty_as_plus_infinity);
-}
-
-/*
-  Pre-conditions:
-  - p is complete
-  - atm_i_tst can be incomplete
-  - |data_inputs|=1
-  Ensures:
-  - each partition in the result set is complete and adheres to tst for i
-*/
-set<Partition> compute_all_p_with_i(const Partition& p, const TstAtom& atm_tst)
-{
-    /////// check pre-condition |inputs|=1
-    /////set<string> inputs;
-    /////for (const auto& var_cmp : atm_tst.data_to_cmp)
-    /////    if (is_input_name(var_cmp.first))
-    /////        inputs.insert(var_cmp.first);
-    /////MASSERT(inputs.size() == 1, "function pre-condition violation");
-
-    /////string i_name = *inputs.begin();
-    /////auto i_cmp = atm_tst.data_to_cmp.at(i_name);
-    /////if (i_cmp.is_EQUAL())
-    /////{
-    /////    auto p_result = p;  // copy
-    /////    p_result.get_class_of(i_cmp.rU).insert(i_name);
-    /////    return { p_result };
-    /////}
-
-    //////*
-    /////  -∞ < r0 < r1 < r2 < r3 < +∞
-    /////       ^    ^    ^    ^
-    /////  Enumeration happens as noted above.
-    /////  For each register, we check two tests:
-    /////  (prev,cur) and [cur].
-    /////  Hence:
-    /////  (-∞,r0) and [r0];  (r0,r1) and [r1];  (r1,r2) and [r2];  (r2,r3), [r3].
-    /////  and after the loop we check (r3,+∞).
-    /////*/
-
-    /////set<Partition> all_p_with_i;
-    /////for (const auto& ec : p.repr)
-    /////{
-    /////    auto cur_reg = *(ec.begin());
-
-    /////    // we try two tests: (prev_reg,cur_reg) and [cur_reg]
-
-    /////    // if (i_cmp.rU < cur_reg)
-    /////    if (a_is_less_b(i_cmp.rU, cur_reg,  p, true))
-    /////        return all_p_with_i;  // we are done
-
-    /////    // if (i_cmp.rL ≥ cur_reg)
-    /////    if (a_is_ge_b(i_cmp.rL, cur_reg, p, false))
-    /////        continue;  // didn't reach yet
-
-    /////    // now: i_cmp.rL < cur_reg ≤ i_cmp.rU
-
-    /////    // The case [cur_reg]:
-    /////    if (a_is_less_b(cur_reg, i_cmp.rU, p, true))
-    /////    {
-    /////        auto new_p = p;  // copy
-    /////        new_p.get_class_of(cur_reg).insert(i_name);
-    /////        all_p_with_i.insert(new_p);
-    /////    }
-
-    /////    // The case (prev_reg, cur_reg):
-    /////    // since rL < cur_reg ≤ rU  and  rL ≤ prev_reg,
-    /////    // we have (prev_reg, cur_reg) ⊆ (rL, rU), hence no if-checks
-    /////    auto new_p = p;
-    /////    auto it_of_cur_ec = find(new_p.repr.begin(), new_p.repr.end(), ec);
-    /////    new_p.repr.insert(it_of_cur_ec, {i_name});  // insert before it_of_cur_ec, creating prev_reg<i<cur_reg
-    /////    all_p_with_i.insert(new_p);
-    /////}
-
-    /////if (i_cmp.rU.empty())    // if unrestricted from above
-    /////{                        // then put i as the last element of p
-    /////    auto new_p = p;
-    /////    new_p.repr.push_back({i_name});
-    /////    all_p_with_i.insert(new_p);
-    /////}
-
-    /////return all_p_with_i;
-}
 
 Partition build_init_partition(const hset<string>& sysR, const hset<string>& atmR)
 {
     Graph g;
     g.add_vertex(0);
     hmap<V, EC> v_to_ec;
-    v_to_ec[0] = a_union_b(sysR, atmR);
+    v_to_ec.insert({0, a_union_b(sysR, atmR)});
 
     return Partition(g, v_to_ec);
 }
 
-void sdf::reduce(const spot::twa_graph_ptr& reg_ucw, uint nof_sys_regs,
-                 spot::twa_graph_ptr& classical_ucw,
-                 set<spot::formula>& sysTst,
-                 set<spot::formula>& sysAsgn,
-                 set<spot::formula>& sysOutR)
+// convert "≥" into "= or >", similarly for "≠"
+// note: the test "True" is handled later
+twa_graph_ptr preprocess(const twa_graph_ptr& reg_ucw)
 {
+    twa_graph_ptr g = spot::make_twa_graph(reg_ucw->get_dict());
+    g->copy_ap_of(reg_ucw);
+    g->copy_acceptance_of(reg_ucw);
+
+    hmap<uint, uint> new_by_old;  // (technical) relate states in the old an new automaton (they have the same states up to renaming)
+    auto s = [&g, &new_by_old](const uint& reg_ucw_s)
+            {
+                if (new_by_old.find(reg_ucw_s) == new_by_old.end())
+                    new_by_old.insert({reg_ucw_s, g->new_state()});
+                return new_by_old.at(reg_ucw_s);
+            };
+
+    g->set_init_state(s(reg_ucw->get_init_state_number()));
+
+    for (const auto& e : reg_ucw->edges())
+    {
+        auto vars_as_conj = spot::bdd_to_formula(bdd_support(e.cond), g->get_dict());
+
+        MASSERT(vars_as_conj.is_constant() or
+                vars_as_conj.is(spot::op::And) or
+                vars_as_conj.is(spot::op::ap),
+                "unexpected");
+
+        vector<formula> aps;
+
+        if (vars_as_conj.is(spot::op::And))
+            for (const auto& it : vars_as_conj)
+                aps.push_back(it);
+        else if (vars_as_conj.is(spot::op::ap))
+            aps.push_back(vars_as_conj);
+        // else aps is empty
+
+        bdd new_cond = e.cond;
+        for (const auto& ap : aps)
+        {
+            if (!is_atm_tst(ap.ap_name()))
+                continue;
+
+            auto [t1,t2,cmp] = parse_tst(ap.ap_name());
+            if (cmp == ">" or cmp == "<" or cmp == "=")
+                continue;
+
+            formula ap1, ap2;
+            if (cmp == "≥")
+            {
+                ap1 = formula::ap(t1 + ">" + t2);  // NOLINT
+                ap2 = formula::ap(t1 + "=" + t2);  // NOLINT
+            }
+            if (cmp == "≤")
+            {
+                ap1 = formula::ap(t1 + "<" + t2);  // NOLINT
+                ap2 = formula::ap(t1 + "=" + t2);  // NOLINT
+            }
+            if (cmp == "≠")
+            {
+                ap1 = formula::ap(t1 + "<" + t2);  // NOLINT
+                ap2 = formula::ap(t1 + ">" + t2);  // NOLINT
+            }
+
+            g->register_ap(ap1);
+            g->register_ap(ap2);
+
+            bdd subst = formula_to_bdd(formula::Or({ap1, ap2}), g->get_dict(), g);
+
+            auto bdd_id_of_ap = g->register_ap(ap);  // helps us to get BDD id of the ap (otherwise does nothing)
+            new_cond = bdd_compose(new_cond, subst, bdd_id_of_ap); // NB: new_cond may be equivalent to false due to conflicting tests like "out>r & out=r"
+        }
+
+        g->new_edge(s(e.src), s(e.dst), new_cond, e.acc);
+    }
+
+    return g;
+}
+
+vector<Partition> compute_all_p_io(const Partition& partial_p_io)
+{
+    vector<Partition> result;
+    for (auto&& [new_g,mapper] : GA::all_topo_sorts2(partial_p_io.g))
+    {
+        hmap<V,EC> new_v_to_ec;
+        for (auto&& [new_v,set_of_old_v] : mapper)
+            for (auto&& old_v : set_of_old_v)
+                for (auto&& r : partial_p_io.v_to_ec.at(old_v))
+                    new_v_to_ec[new_v].insert(r);
+        result.emplace_back(new_g, new_v_to_ec);
+    }
+    return result;
+}
+
+/*
+  From a given partition (which includes positions of i and o),
+  compute system registers compatible with o.
+  ASSUMPTION: there is only one output `o`.
+  ASSUMPTION: p_io is complete
+  NB: the partition is assumed to be complete, yet there might still be several different possible r:
+      when they all reside in the same EC.
+*/
+hset<string> pick_R(const Partition& p_io, const hset<string>& sysR)
+{
+    hset<string> result;
+    for (const auto& [v,ec] : p_io.v_to_ec)
+        if (find_if(ec.begin(), ec.end(), is_output_name) != ec.end())  // assumes there is only one o
+            return a_intersection_b(ec, sysR);
+    return {};
+}
+
+Partition update(const Partition& p, const Asgn& asgn)
+{
+    auto new_g = p.g;  // copy
+    auto new_v_to_ec = p.v_to_ec;
+
+    for (const auto& [io, regs] : asgn.asgn)
+    {
+        auto v_io = get_vertex_of(io, new_g, new_v_to_ec);
+        for (const auto& r : regs)
+        {
+            auto v_r = get_vertex_of(r, new_g, new_v_to_ec);
+            if (v_r == v_io)
+                continue;  // store the same value; has no effect on partition
+
+            new_v_to_ec.at(v_io).insert(r);
+
+            new_v_to_ec.at(v_r).erase(r);
+            if (new_v_to_ec.at(v_r).empty())
+            {
+                GA::close_vertex(new_g, v_r);
+                new_v_to_ec.erase(v_r);
+            }
+        }
+    }
+
+    return Partition(new_g, new_v_to_ec);
+}
+
+
+Partition remove_io_from_p(const Partition& p)
+{
+    auto new_v_to_ec = p.v_to_ec;
+    auto new_g = p.g;
+
+    for (const auto& var : {IN, OUT})
+    {
+        auto v = get_vertex_of(var, new_g, new_v_to_ec);
+        new_v_to_ec.at(v).erase(var);
+        if (new_v_to_ec.at(v).empty())
+        {
+            GA::close_vertex(new_g, v);
+            new_v_to_ec.erase(v);
+        }
+    }
+    return Partition(new_g, new_v_to_ec);
+}
+
+// Extract a system test from the partition.
+// Return one of: *=r, r1<*<r2, *<r, r<*
+// Note: we extract a partial test (i.e. wrt subset of registers)
+//       instead of the full one (wrt. _all_ registers),
+//       but that is sound/complete. The latter fact is because
+//       we can completely restore the full tests from the created
+//       partial tests (remember that sys partitions behave deterministically).
+formula extract_sys_tst_from_p(const Partition& p, const hset<string>& sysR)
+{
+    auto v_IN = get_vertex_of(IN, p.g, p.v_to_ec);
+    auto ec_IN = p.v_to_ec.at(v_IN);
+
+    auto get_sys_r = [&sysR](const EC& ec)
+            {
+                for(const auto& r : sysR)
+                    if (ec.count(r))
+                        return optional<string>(r);
+                return optional<string>();
+            };
+
+    // try *=r
+    if (auto r = get_sys_r(ec_IN); r.has_value())
+        return formula::And({ctor_sys_tst_inp_equal_r(r.value()),
+                             formula::Not(ctor_sys_tst_inp_smaller_r(r.value()))});
+
+    // reaching here means r1<*<r2 or r<* or *<r
+
+    // the code below assumes that p has a linear order and where every node has a single child,
+    // so first we check this assumption indeed holds
+    for (auto vvv : p.g.get_vertices())
+        MASSERT(p.g.get_children(vvv).size() <= 1, "we assume the minimality of a linear ordering in the graph of p");
+
+    auto get_tightest_r = [&](const vector<V>& successors)
+            {
+                for (auto s : successors)  // iterate in the order of distance from v
+                {
+                    auto r = get_sys_r(p.v_to_ec.at(s));
+                    if (r.has_value())
+                        return r;
+                }
+                return optional<string>();
+            };
+
+    // getting the tightest system r from below
+    vector<V> descendants;
+    GA::get_descendants(p.g, v_IN, [&descendants](const V& v){descendants.push_back(v);});
+    optional<string> r_below = get_tightest_r(descendants);
+
+    // getting the tightest system r from above
+    vector<V> ancestors;
+    GA::get_ancestors(p.g, v_IN, [&ancestors](const V& v){ancestors.push_back(v);});
+    optional<string> r_above = get_tightest_r(ancestors);
+
+    MASSERT(r_below.has_value() || r_above.has_value(), "not possible");
+
+    formula result = formula::tt();
+
+    if (r_below.has_value())
+    {
+        // "r_below < *", encoded as !(in<r) & !(in=r)
+        result = formula::And({formula::Not(ctor_sys_tst_inp_smaller_r(r_below.value())),
+                               formula::Not(ctor_sys_tst_inp_equal_r(r_below.value()))
+                               });
+    }
+
+    if (r_above.has_value())
+    {
+        // "* < r_above"
+        result = formula::And({result,
+                               ctor_sys_tst_inp_smaller_r(r_above.value()),
+                               formula::Not(ctor_sys_tst_inp_equal_r(r_above.value()))
+                               });
+    }
+
+    return result;
+}
+
+formula asgn_to_formula(const Asgn& sys_asgn, const set<formula>& sysAsgnAtoms)
+{
+    // find sysAsgnAtom for each r in Asgn.at(i), set it to True, and all others to False
+    // note: only i is stored into registers
+
+    vector<formula> positive_atoms;
+    if (sys_asgn.asgn.count(IN))
+        for (const auto& r: sys_asgn.asgn.at(IN))
+            positive_atoms.push_back(ctor_sys_asgn_r(r));
+
+    return formula::And(
+            {
+                formula::And(positive_atoms),
+                formula::Not(formula::Or(to_vector(a_minus_b(sysAsgnAtoms, positive_atoms))))  // !(a|b|...) means (!a&!b&...)
+            });
+}
+
+/* return the formula "any of all_r is true" */
+formula R_to_formula(const hset<string>& all_r)
+{
+    vector<formula> R_atoms;
+    transform(all_r.begin(), all_r.end(), back_inserter(R_atoms), ctor_sys_out_r);
+    return formula::Or(R_atoms);
+}
+
+struct QPHashEqual
+{
+    // operator `hash`
+    size_t operator()(const pair<uint, Partition>& qp) const
+    {
+        return pair_hash<uint,
+                         Partition,
+                         std::hash<uint>,
+                         FullPartitionHelper>()(qp);
+    }
+
+    // operator `equal`
+    bool operator()(const pair<uint, Partition>& qp1, const pair<uint, Partition>& qp2) const
+    {
+        return (qp1.first == qp2.first && FullPartitionHelper::equal(qp1.second, qp2.second));
+    }
+};
+
+void assert_no_intersection(const hset<string>& set1, const hset<string>& set2)
+{
+    for (const auto& e1 : set1)
+        MASSERT(!set2.count(e1),
+                "nonzero intersection: " << join(", ", set1) << " vs " << join(", ", set2));
+}
+
+formula create_MUTEXCL_violation(const set<formula>& props_);
+
+/* Add an edge labelled `label` into `dst_state` from every state except `dst_state` itself. */
+void add_edge_to_every_state(twa_graph_ptr& atm,
+                             uint dst_state,
+                             const formula& label);
+
+tuple<twa_graph_ptr,  // new_ucw
+      set<formula>,   // sysTst
+      set<formula>,   // sysAsgn
+      set<formula>>   // sysOutR
+sdf::reduce(const twa_graph_ptr& reg_ucw_, uint nof_sys_regs)
+{
+    // TODO: make sure ap "i>r" and "i > r" are treated the same
+
+    // result
+    twa_graph_ptr new_ucw;
+    set<formula> sysTst, sysAsgn, sysOutR;  // Boolean variables
+
+    twa_graph_ptr reg_ucw = preprocess(reg_ucw_);
+
     auto bdd_dict = spot::make_bdd_dict();
-    classical_ucw = spot::make_twa_graph(bdd_dict);
+    new_ucw = spot::make_twa_graph(bdd_dict);
+
+    new_ucw->copy_acceptance_of(reg_ucw);
+    if (reg_ucw->prop_state_acc())
+        new_ucw->prop_state_acc(true);
 
     auto sysR = build_sysR(nof_sys_regs);
     auto atmR = build_atmR(reg_ucw);
-    introduce_sysActionAPs(sysR, classical_ucw, sysTst, sysAsgn, sysOutR);
+    assert_no_intersection(sysR, atmR);
 
-    // -- introduce Boolean APs --
-    auto non_actionAPs = get_non_actionAPs_from(reg_ucw);
-    for (const auto& ap : non_actionAPs)
-        classical_ucw->register_ap(ap);
+    introduce_sysActionAPs(sysR, new_ucw, sysTst, sysAsgn, sysOutR);
+    introduce_labelAPs(reg_ucw, new_ucw);
 
     // -- the main part --
     // The register-naming convention (hard-coded) is:
     // - system registers are rs1, rs2, ..., rsK
     // - automaton registers are r1, r2, ... (NOT TRUE: I JUST EXTRACT WHATEVER THE AUTOMATON USES!)
 
-    // create the initial state and partition
-    auto r_init = reg_ucw->get_init_state_number();
-    auto c_init = classical_ucw->new_state();
+    hmap<pair<uint, Partition>, uint, QPHashEqual, QPHashEqual> qp_to_c;
+    auto get_c = [&qp_to_c, &new_ucw](const pair<uint, Partition>& qp)
+            {
+                // helper function: get (and create if necessary) a state
+                if (auto it = qp_to_c.find(qp); it != qp_to_c.end())
+                    return it->second;
+                auto new_c = new_ucw->new_state();
+                qp_to_c.insert({qp, new_c});
 
-    hmap<uint, pair<uint, Partition>> c_to_qp;  // 'classical state' to (reg-atm state, partition)
-    c_to_qp.insert(make_pair(c_init, make_pair(r_init, build_init_partition(sysR, atmR))));
+                {   // setting state names (useful for debugging):
+                    auto names = new_ucw->get_or_set_named_prop<vector<string>>("state-names");
+                    for (auto i = names->size(); i < new_c; ++i)
+                        names->push_back(string());  // a dummy name for not yet used states (should not happen, 'just in case')
 
-    set<uint> c_todo;
-    c_todo.insert(c_init);
-    hset<pair<uint, Partition>,pair_hash> qp_processed;
+                    stringstream ps;
+                    ps << qp.second;
+                    auto p_str = substituteAll(ps.str(), " ", "");
+                    stringstream ss;
+                    ss << qp.first << ", " << p_str;
+                    if (names->size() == new_c)
+                        names->push_back(ss.str());
+                    else
+                        (*names)[new_c] = ss.str();
+                }
 
-    // main loop
-    while (!c_todo.empty())
+                return new_c;
+            };
+
+    unordered_set<pair<uint, Partition>,QPHashEqual,QPHashEqual> qp_processed;
+    hset<pair<uint, Partition>,QPHashEqual,QPHashEqual> qp_todo;
+
+    auto init_qp = make_pair(reg_ucw->get_init_state_number(), build_init_partition(sysR, atmR));
+    new_ucw->set_init_state(get_c(init_qp));
+    qp_todo.insert(init_qp);
+
+    while (!qp_todo.empty())
     {
-        auto c = pop_first(c_todo);
-        auto [q,p] = c_to_qp.at(c);
-        qp_processed.insert({q, p});
+        DEBUG("qp_todo.size() = " << qp_todo.size() << ", "
+              "qp_processed.size() = " << qp_processed.size());
 
-        for (const auto& t: reg_ucw->out(q))
+        auto qp = pop_first<pair<uint, Partition>>(qp_todo);
+        qp_processed.insert(qp);
+
+        for (const auto& e: reg_ucw->out(qp.first))
         {
-            cout << t.src << " -" << t.cond << "-> " << t.dst << endl;
-            auto t_f = spot::bdd_to_formula(t.cond, reg_ucw->get_dict());
-
-            // t_f is in DNF or true
-            if (t_f.is_tt())  // TODO: handle
-                continue;
+//            cout << e.src << " -" << e.cond << "-> " << e.dst << endl;
+            auto e_f = spot::bdd_to_formula(e.cond, reg_ucw->get_dict());
+            // e_f is in DNF or true
 
             // iterate over individual edges
-            for (const auto& cube : get_cubes(t_f))
+            for (const auto& cube : get_cubes(e_f))
             {
-//                cout << "cube: " << join(" & ", cube) << endl;
-                // TODO: below we assume that the tests and partitions are complete:
-                //       The assumption on the completeness of the partitions simplifies the algorithm.
-
-
-                /*  The algorithm:
-
-                    let partial_p_io = compute_partial_p_io(p, atm_tst_atoms)
-                    let all_p_io = compute_all_p_io(partial_p_io)             // <-- (should be possible to incorporate here sys_asgn-out_r enumeration)
+                /*  // NB: we assume that partitions are complete, which simplifies the algorithm.
+                    let partial_p_io = compute_partial_p_io(p, atm_tst_atoms) // partition is complete but tst is partial
+                    let all_p_io = compute_all_p_io(partial_p_io)             // <-- (should be possible to incorporate sys_asgn-out_r enumeration)
                     for every p_io in all_p_io:
                         for every sys_asgn:
                             let p_io' = update(p_io, sys_asgn)                // update Rs
-                            let all_p_io_r = compute_all_p_io_r(p_io')
-                            for every p_io_r in all_p_io_r:
-                                let p_io_r' = update(p_io_r, atm_asgn)        // update Ra
-                                let p_succ = remove i and o from p_io_r'
-                                if (q_succ, p_succ) not in qp_processed:
-                                    add (q_succ, p_succ) to c_todo
+                            let all_r = pick_all_r(p_io', sysR)
+                            let p_io'' = update(p_io', atm_asgn)              // update Ra
+                            let p_succ = remove i and o from p_io''
+                            add to classical_ucw the edge (q,p) -> (q_succ, p_succ) labelled (sys_tst(p_io) & ap(cube), sys_asgn, OR(all_r))
+                            if (q_succ, p_succ) not in qp_processed:
+                                add (q_succ, p_succ) to c_todo
                 */
 
-                auto [APs, atm_cmp_atoms, atm_asgn_atoms] = separate(cube);
+                auto [APs, atm_tst_atoms, atm_asgn_atoms] = separate(cube);
                 auto atm_asgn = compute_asgn(atm_asgn_atoms);
-                auto partial_p_i = compute_partial_p_io(p, atm_cmp_atoms);  // TODO: ensure cmp OP is one of <,>,= (but not ≠ ≤ ≥)
-                // todo: CURRENT: (i've finished implementing the graph algorithms)
-                // todo: TEST the function compute_partial_p_io
 
-                // T0D0: after writing compute_all_p_io, check how to incorporate there enumeration of sys_asgn-out_r
-            }
-        }
+                auto partial_p_i = compute_partial_p_io(qp.second, atm_tst_atoms);
+                if (!partial_p_i.has_value())  // means atm_tst_atoms are not consistent
+                    continue;
+                for (const auto& p_io : compute_all_p_io(partial_p_i.value()))
+                {
+//                    cout << "p_io: " << p_io << ", sys_tst: " << extract_sys_tst_from_p(p_io, sysR) << endl;
+                    for (const auto& sys_asgn_atoms : all_subsets<formula>(sysAsgn))
+                    {
+                        auto sys_asgn = compute_asgn(sys_asgn_atoms);
+                        auto p_io_ = update(p_io, sys_asgn);
+                        auto all_r = pick_R(p_io_, sysR);
+//                        cout << "sys_asgn: " << sys_asgn << endl;
+//                        cout << "all_r: " << join(", ", all_r) << endl;
+//                        cout << endl;
+                        // p_io is complete, hence we should continue only if `o` lies in one of ECs with system regs in it
+                        if (all_r.empty())
+                            continue;
+                        auto p_io__ = update(p_io_, atm_asgn);  // NOLINT(bugprone-reserved-identifier)
+                        auto p_succ = remove_io_from_p(p_io__);
+
+                        auto qp_succ = make_pair(e.dst, p_succ);
+
+                        /* add to classical_ucw the edge (q,p) -> (q_succ, p_succ) labelled (sys_tst(p_io) & ap(cube), sys_asgn, out_r) */
+                        auto cond = formula::And({asgn_to_formula(sys_asgn, sysAsgn),
+                                                  extract_sys_tst_from_p(p_io, sysR),
+                                                  R_to_formula(all_r),
+                                                  formula::And(vector<formula>(APs.begin(), APs.end()))});
+                        new_ucw->new_edge(get_c(qp), get_c(qp_succ),
+                                          spot::formula_to_bdd(cond, new_ucw->get_dict(), new_ucw),
+                                          e.acc);
+
+                        if (!qp_processed.count(qp_succ))
+                            qp_todo.insert(qp_succ);
+                    }
+                }
+            } // for (cube : get_cubes(e_f))
+        } // for (e : rec_ucw->out(qp.first))
+    } // while (!qp_todo.empty())
+
+    // To every state,
+    // we add an outgoing edge leading to the rejecting sink when the assumptions on _system_ are violated.
+    // Assumptions on system:
+    // exactly one of ↑r holds (MUTEXCL)
+
+    // first create a rejecting sink
+    auto rej_sink = new_ucw->new_state();
+    new_ucw->new_acc_edge(rej_sink, rej_sink,
+                          spot::formula_to_bdd(formula::tt(), new_ucw->get_dict(), new_ucw));
+    // now add the edges
+    add_edge_to_every_state(new_ucw, rej_sink, create_MUTEXCL_violation(sysOutR));
+
+    return {new_ucw, sysTst, sysAsgn, sysOutR};
+}
+
+/* Add an edge labelled `label` into `dst_state` from every state except `dst_state` itself. */
+void add_edge_to_every_state(twa_graph_ptr& atm,
+                             uint dst_state,
+                             const formula& label)
+{
+    for (uint s = 0; s < atm->num_states(); ++s)
+    {
+        if (s == dst_state)
+            continue;
+        atm->new_edge(s, dst_state, spot::formula_to_bdd(label, atm->get_dict(), atm));
     }
+}
+
+formula create_MUTEXCL_violation(const set<formula>& props_)
+{
+    // return "none are true" OR "≥2 are true"
+    vector<formula> props(props_.begin(), props_.end());
+    vector<formula> big_OR;
+    big_OR.push_back(formula::Not(formula::Or(props)));
+    for (uint i1 = 0; i1 < props.size(); ++i1)
+        for (uint i2 = i1+1; i2 < props.size(); ++i2)
+            big_OR.push_back(formula::And({props.at(i1), props.at(i2)}));
+    return formula::Or(big_OR);
 }
 
 void sdf::tmp()
 {
-    // TODO: test join_tst
+    Graph g1;
+    g1.add_vertex(1);
+    auto v_to_ec1 = hmap<Graph::V, hset<string>>(
+            {{1, {"b", "a"}}});
 
-    /////////Partition p = Partition({{"r1"}, {"r2"}, {"r3"}, {"r4"}, {"r5"}, {"r6"}, {"r7"}});
+    Graph g2;
+    g2.add_vertex(1);
+    auto v_to_ec2 = hmap<Graph::V, hset<string>>(
+            {{1, {"a", "b"}}});
 
-    /////////auto atm_tst = TstAtom(Partition({{"i"}, {"o"}}),
-    /////////                       { {"i", Cmp::Above("r2")} });
+    auto p1 = Partition(g1, v_to_ec1);
+    auto p2 = Partition(g2, v_to_ec2);
 
-    /////////cout << p << endl;
-    /////////cout << atm_tst << endl;
-    /////////cout << "------" << endl;
-    /////////auto all_p_with_i = compute_all_p_with_i(p, atm_tst);
-    /////////for (auto p : all_p_with_i)
-    /////////    cout << p << endl;
+    cout << FullPartitionHelper::calc_hash(p1) << endl << FullPartitionHelper::calc_hash(p2) << endl;
+    cout << FullPartitionHelper::equal(p1, p2) << endl;
 
-//    Cmp c1 = Cmp::Equal("ra");
-//    Cmp c2 = Cmp::Below("ra");
-//    Cmp c3 = Cmp::Above("rb");
-//    Cmp c4 = Cmp::Between("rb", "ra");
-//
-//    cout << c1 << endl;
-//    cout << c2 << endl;
-//    cout << c3 << endl;
-//    cout << c4 << endl;
+
+    /*
+    Graph g1 ({{1,2},{2,3}});
+    auto v_to_ec1 = hmap<Graph::V, hset<string>>(
+            {{1, {"a", "b"}},
+             {2, {"c"}},
+             {3, {"d"}}});
+
+    auto p1 = Partition(g1, v_to_ec1);
+
+    Graph g2 ({{10,20},{20,30}});
+    auto v_to_ec2 =  hmap<Graph::V, hset<string>>(
+            {{10, {"a", "b"}},
+             {20, {"c"}},
+             {30, {"d"}}});
+
+    auto p2 = Partition(g2, v_to_ec2);
+
+    cout << FullPartitionHelper::calc_hash(p1) << endl << FullPartitionHelper::calc_hash(p2) << endl;
+    cout << FullPartitionHelper::equal(p1, p2) << endl;
+    */
+
+//    hset<pair<uint, Partition>,pair_hash> qp_todo;
+//    qp_todo.insert({10,p1});
+//    qp_todo.insert({10,p2});
+//    cout << qp_todo.count({10,p1}) << endl;
+//    cout << p1.calc_hash() << endl;
+//    cout << p2.calc_hash() << endl;
+//    cout << (p1 == p2) << endl;
+
+
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -25,8 +25,8 @@ using namespace std;
 using namespace sdf;
 
 
-#define DEBUG(message) {spdlog::get("console")->debug() << message;}
-#define INF(message) {spdlog::get("console")->info() << message;}
+#define DEBUG(message) {spdlog::get("console")->debug() << message;}  // NOLINT(bugprone-macro-parentheses)
+#define INF(message) {spdlog::get("console")->info() << message;}     // NOLINT(bugprone-macro-parentheses)
 
 
 int sdf::run(const std::string& hoa_file_name,
@@ -34,10 +34,7 @@ int sdf::run(const std::string& hoa_file_name,
              bool extract_model,
              const std::string& output_file_name)
 {
-    set<spot::formula> inputs, outputs;
-    spot::twa_graph_ptr aut;
-    bool is_moore;
-    tie(aut, inputs, outputs, is_moore) = read_ehoa(hoa_file_name);
+    auto [aut, inputs, outputs, is_moore] = read_ehoa(hoa_file_name);
 
     // TODO: what happens when tlsf does have inputs/outputs but the formula doesn't mention them?
     //       (should still have it)
@@ -95,7 +92,7 @@ int sdf::run(bool check_unreal,
     bool is_moore;
     tie(formula, inputs, outputs, is_moore) = parse_tlsf(tlsf_file_name);
 
-    // TODO: what happens when tlsf does have inputs/outputs but the formula doesn't mention them?
+    // TODO: what happens when TLSF does have inputs/outputs but the formula doesn't mention them?
     //       (should still have it)
 
     INF("\n" <<
@@ -142,7 +139,7 @@ int sdf::run(bool check_unreal,
 }
 
 
-bool sdf::synthesize_atm(spot::twa_graph_ptr ucw_aut,
+bool sdf::synthesize_atm(spot::twa_graph_ptr ucw_aut, // NOLINT(performance-unnecessary-value-param)
                          const std::set<spot::formula>& inputs,
                          const std::set<spot::formula>& outputs,
                          bool is_moore,
@@ -189,8 +186,9 @@ bool sdf::synthesize_formula(const spot::formula& formula,
     if (postprocess_atm)
         translator.set_level(spot::postprocessor::High);
     // on some examples the high optimization is the bottleneck
-    // while Medium seems to be good enough (of course, better to benchmark this) // TODO: submitted to SYNTCOMP'21 two configurations: decide afterwards
+    // while Medium seems to be good enough
     // examples: try_ack_arbiter, lift
+    // NB: the results of SYNTCOMP'21 show that Medium performs better overall (by a slight margin)
 
     Timer timer;
     spot::twa_graph_ptr aut = translator.run(neg_formula);

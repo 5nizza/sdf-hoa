@@ -43,7 +43,7 @@ struct hash<kState>
 {
     size_t operator()(const kState& x) const
     {
-        return pair_hash()(make_pair(x.state, x.k));
+        return pair_hash<uint, uint>()(make_pair(x.state, x.k));
     }
 };
 }
@@ -72,7 +72,7 @@ spot::twa_graph_ptr sdf::k_reduce(const spot::twa_graph_ptr& aut, uint max_nof_v
     spot::scc_info scc_info(aut);
 
     // `state` is a state of `aut`, `kstate` is a state of `k_aut`
-    unordered_map<pair<uint, uint>, kState, pair_hash> kstate_by_state_k;
+    unordered_map<pair<uint, uint>, kState, pair_hash<uint,uint>> kstate_by_state_k;
     vector<pair<kState, uint>> kstate_state_to_process;
 
     auto init_kstate = kState(k_aut->new_state(), max_nof_visits);

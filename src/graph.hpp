@@ -4,7 +4,6 @@
  */
 #pragma once
 
-#include <stack>
 #include <unordered_map>
 #include <unordered_set>
 #include <iostream>  // for cerr in assertions
@@ -18,16 +17,29 @@ class Graph
 public:
     typedef uint V;
     Graph() = default;
+    Graph(const std::initializer_list<std::pair<V,V>>& edges)
+    {
+        for (const auto& [src, dst] : edges)
+            add_edge(src, dst);
+    }
+
+    Graph(const std::initializer_list<V>& vertices)
+    {
+        for (const auto& v : vertices)
+            add_vertex(v);
+    }
 
     /**
      * Add a connection between from src and to dst.
-     * Automatically create any missing vertices.
+     * Automatically adds mentioned vertices.
      */
     void add_edge(const V& src, const V& dst)
     {
-        // (no need to call `add_vertex` -- the operator [] adds them)
-        _edges_by_v[src].children.insert(dst);
-        _edges_by_v[dst].parents.insert(src);
+        children_by_v[src].insert(dst);
+        parents_by_v[src];  // create if doesn't exist
+
+        parents_by_v[dst].insert(src);
+        children_by_v[dst];  // create if doesn't exist
     }
 
     /** Fails if either:
@@ -36,8 +48,8 @@ public:
      *  (note: doesn't remove any vertices) */
     void remove_edge(const V& src, const V& dst)
     {
-        auto result = _edges_by_v.at(src).children.erase(dst) == 1 and
-                      _edges_by_v.at(dst).parents.erase(src) == 1;
+        auto result = children_by_v.at(src).erase(dst) == 1 and
+                      parents_by_v.at(dst).erase(src) == 1;
 
         if (not result)
         {
@@ -49,8 +61,10 @@ public:
     /** Add a vertex (fails, if the vertex is already present). */
     void add_vertex(const V& vertex)
     {
-        auto [it, result] = _edges_by_v.emplace(vertex, VData{});
-        if (not result)
+        auto [it1, result1] = children_by_v.insert({vertex, {}});
+        auto [it2, result2] = parents_by_v.insert({vertex, {}});
+
+        if (not result1 or not result2)
         {
             std::cerr << __FILE__ << " (" << __LINE__ << ") : " << "the vertex already exists: " << vertex << std::endl;
             abort();
@@ -62,65 +76,55 @@ public:
     {
         // unregister v from the parents of v_children and from the children of parents_v
 
-        for (auto p_v : _edges_by_v.at(v).parents)
+        for (auto p_v : parents_by_v.at(v))
         {
             if (p_v == v) continue;  // no need to modify the parents/children of the v itself
-            _edges_by_v.at(p_v).children.erase(v);
+            children_by_v.at(p_v).erase(v);
         }
 
-        for (auto v_c : _edges_by_v.at(v).children)
+        for (auto v_c : children_by_v.at(v))
         {
             if (v_c == v) continue;
-            _edges_by_v.at(v_c).parents.erase(v);
+            parents_by_v.at(v_c).erase(v);
         }
 
-        _edges_by_v.erase(v);
+        parents_by_v.erase(v);
+        children_by_v.erase(v);
     }
 
-    std::unordered_set<V> get_children(const V& vertex) const
+    const std::unordered_set<V>& get_children(const V& vertex) const
     {
-        std::unordered_set<V> children;
-        if (_edges_by_v.find(vertex) == _edges_by_v.end())
-            return children;
-
-        return _edges_by_v.at(vertex).children;
+        return children_by_v.at(vertex);
     }
 
-    std::unordered_set<V> get_parents(const V& vertex) const
+    const std::unordered_set<V>& get_parents(const V& vertex) const
     {
-        std::unordered_set<V> parents;
-        if (_edges_by_v.find(vertex) == _edges_by_v.end())
-            return parents;
-
-        return _edges_by_v.at(vertex).parents;
+        return parents_by_v.at(vertex);
     }
 
     std::unordered_set<V> get_vertices() const
     {
         std::unordered_set<V> vertices;
-        for (const auto& e : _edges_by_v)
+        for (const auto& e : children_by_v)  // could as well iterate parentes_by_v instead
             vertices.insert(e.first);
         return vertices;
     }
 
+
     /** Note: these only compare verbatim (no 'graph isomorphism'). */
-    bool operator==(const Graph& rhs) const { return _edges_by_v == rhs._edges_by_v; }
+    bool operator==(const Graph& rhs) const { return children_by_v == rhs.children_by_v && parents_by_v == rhs.parents_by_v; }
     bool operator!=(const Graph& rhs) const { return !(rhs == *this); }
+
+    size_t calc_hash() const;
+
+    friend std::ostream& operator<<(std::ostream&, const Graph&);
 
     friend struct GraphAlgo;
 
+
 private:
-    struct VData
-    {
-        std::unordered_set<V> parents;
-        std::unordered_set<V> children;
-
-        bool operator==(const VData& rhs) const { return parents == rhs.parents && children == rhs.children; }
-        bool operator!=(const VData& rhs) const { return !(rhs == *this); }
-    };
-
-    std::unordered_map<V, VData> _edges_by_v;
-
+    std::unordered_map<V, std::unordered_set<V>> parents_by_v;
+    std::unordered_map<V, std::unordered_set<V>> children_by_v;
 };
 
 }

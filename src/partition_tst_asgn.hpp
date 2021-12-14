@@ -42,20 +42,30 @@ struct Partition
     const std::unordered_map<V, EC> v_to_ec;
     Partition()=delete;  // with const above, it makes no sense
 
-    explicit Partition(const Graph& g, const std::unordered_map<V, EC>& v_to_ec): g(g), v_to_ec(v_to_ec), hash_(calc_hash()) { }
+    explicit Partition(const Graph& g, const std::unordered_map<V, EC>& v_to_ec): g(g), v_to_ec(v_to_ec)
+    {
+        MASSERT(v_to_ec.size() == g.get_vertices().size(), "nof_vertices must be equal nof EC classes");
+    }
 
-    // Useful for hash containers. NB: non-intelligent verbatim comparison.
-    bool operator==(const Partition& rhs) const { return g == rhs.g and v_to_ec == rhs.v_to_ec; }
-    bool operator!=(const Partition& rhs) const { return !(*this == rhs); }
+    // if needed, use the explicit one from FullPartitionHelper
+    bool operator==(const Partition& rhs) const = delete;
+    bool operator!=(const Partition& rhs) const = delete;
 
-    friend struct std::hash<Partition>;
+    // NB: quite expensive call
     friend std::ostream& operator<<(std::ostream& out, const Partition& p);
-
-private:
-    const size_t hash_;
-   [[nodiscard]]
-   size_t calc_hash() const;
+    friend struct PartitionHelper;
 };
+
+
+struct FullPartitionHelper
+{
+    static size_t calc_hash(const Partition& p);
+    size_t operator()(const Partition& p) const {return calc_hash(p);}
+
+    // assumes the graph is a line: node1 -> node2 -> ...
+    static bool equal(const Partition& p1, const Partition& p2);
+};
+
 
 /* TstAtom has the form a ◁ b where ◁ in {<,≤,=,≠} */
 struct TstAtom
@@ -106,7 +116,7 @@ private:
 /* Mapping : Var->SetOfReg  describing where to store a value of given variable. */
 struct Asgn
 {
-    const std::unordered_map<std::string, std::unordered_set<std::string>> asgn;  // d is stored into {r1,r2,...}
+    const std::unordered_map<std::string, std::unordered_set<std::string>> asgn;  // io -> {r1,r2,...}
 
     explicit Asgn(const std::unordered_map<std::string, std::unordered_set<std::string>>& asgn): asgn(asgn) { }
 
@@ -114,14 +124,24 @@ struct Asgn
 //    bool operator==(const Asgn& rhs) const { return asgn == rhs.asgn; }
 //    bool operator!=(const Asgn& rhs) const { return !(rhs == *this); }
 
-    friend std::ostream& operator<<(std::ostream& os, const Asgn& asgn_);
+    friend std::ostream& operator<<(std::ostream& os, const Asgn& asgn_)  // have to define it here otherwise gets invisible to the linker
+    {
+        if (asgn_.asgn.empty())
+            return os << "<keep>";
+
+        os << "{ ";
+        os << join(", ", asgn_.asgn, [](auto p) { return p.first + "↦" + "{" + join(",", p.second) + "}"; });
+        os << " }";
+
+        return os;
+    }
 };
 
 }
 
 namespace std
 {
-template<> struct hash<sdf::Partition> { size_t operator()(const sdf::Partition& p) const { return p.hash_; } };
+//template<> struct hash<sdf::Partition> { size_t operator()(const sdf::Partition& p) const { return p.hash_; } };
 template<> struct hash<sdf::TstAtom>       { size_t operator()(const sdf::TstAtom& tst) const     { return tst.hash_; } };
 //template<> struct hash<sdf::Asgn>;
 }

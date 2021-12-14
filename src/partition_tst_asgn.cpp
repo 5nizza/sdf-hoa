@@ -8,22 +8,85 @@
 using namespace std;
 using namespace sdf;
 
+#define hset unordered_set
+#define hmap unordered_map
 
-// bool Partition::operator==(const Partition &rhs) const { return repr == rhs.repr; }
-// bool Partition::operator!=(const Partition &rhs) const { return !(rhs == *this); }
+
+namespace sdf
+{
+
+/** Fails if graph has none or more than one roots (a root is a vertex without predecessors). */
+optional<V> get_root(const Graph& g)
+{
+    optional<V> root;
+    for (auto v: g.get_vertices())
+    {
+        if (g.get_parents(v).empty())
+        {
+            if (root.has_value())
+                return {};  // fail
+            else
+                root = v;
+        }
+    }
+    return root;
+}
+
+
+/** Check that g has shape v1->v2->...->vEnd.
+    NB: syntactic check, i.e., it returns false if the graph succession is a line
+    yet syntactically it looks different.
+*/
+bool is_line(const Graph& g)
+{
+    auto v_ = get_root(g);
+    if (!v_.has_value())
+        return false;
+
+    auto v = v_.value();
+    auto nof_nodes = g.get_vertices().size();
+    for (uint i = 0; i < nof_nodes - 1; ++i, v = *g.get_children(v).begin())
+        if (g.get_children(v).size() != 1)
+            return false;
+    return true;
+}
+
 
 std::ostream& operator<<(ostream& out, const Partition& p)
 {
-    auto convert_v_to_str = [&p](V v)
-            {
-                auto convert_ec_to_str = [](const EC& ec){ return "{" + join(",", ec) + "}";};
-                stringstream ss;
-                ss << convert_ec_to_str(p.v_to_ec.at(v)) << " -> ";
-                ss << "{ ";
-                ss << join(", ", p.g.get_children(v), [&p, &convert_ec_to_str](auto v){return convert_ec_to_str(p.v_to_ec.at(v));});
-                ss << " }";
-                return ss.str();
-            };
+    auto convert_ec_to_str = [](const EC& ec)
+    {
+        if (ec.size() > 1)
+            return "{" + join(",", ec) + "}";
+        else
+            return join("", *ec.begin());  // hacky way to just convert to str
+    };
+
+    if (is_line(p.g))
+    {
+        stringstream ss;
+
+        auto v = get_root(p.g).value();
+        auto nof_nodes = p.g.get_vertices().size();
+        for (uint i = 0; i < nof_nodes - 1; ++i, v = *p.g.get_children(v).begin())
+            ss << convert_ec_to_str(p.v_to_ec.at(v)) << " > ";
+        ss << convert_ec_to_str(p.v_to_ec.at(v));
+        return out << ss.str();
+    }
+
+    auto convert_v_to_str = [&p,&convert_ec_to_str](V v)
+    {
+        stringstream ss;
+        ss << convert_ec_to_str(p.v_to_ec.at(v));
+        if (p.g.get_children(v).empty())
+            return ss.str();
+        ss << " -> ";
+        ss << "{ ";
+        ss << join(", ", p.g.get_children(v),
+                   [&p, &convert_ec_to_str](auto v) { return convert_ec_to_str(p.v_to_ec.at(v)); });
+        ss << " }";
+        return ss.str();
+    };
 
     out << "{ ";
     out << join(", ", p.g.get_vertices(), convert_v_to_str);
@@ -32,177 +95,81 @@ std::ostream& operator<<(ostream& out, const Partition& p)
     return out;
 }
 
-size_t calc_hash_for_graph(const Graph& g)
+
+size_t FullPartitionHelper::calc_hash(const Partition& p)
 {
-    return xor_hash(g.get_vertices(),
-                    [&](const V& v) {return hash<V>()(v) ^ xor_hash(g.get_children(v), std::hash<V>());});
-                                   // hash_of_the_vertex ^ hash_of_the_children_container
-}
-
-size_t Partition::calc_hash() const
-{
-    auto hash_of_v_to_ec = xor_hash(this->v_to_ec,
-                                    [](const pair<V,EC>& e) { return hash<V>()(e.first)^xor_hash(e.second, std::hash<string>());});
-
-    auto hash_of_g =  calc_hash_for_graph(g);
-
-    return hash_of_v_to_ec ^ hash_of_g;
-}
-
-std::ostream& operator<<(ostream& out, const Asgn& asgn)
-{
-    if (asgn.asgn.empty())
-        return out << "<keep>";
-
-    out << "{ ";
-    out << join(", ", asgn.asgn, [](auto p) { return p.first + "↦" + "{" + join(",", p.second) + "}"; });
-    out << " }";
-
-    return out;
+    // we simply ignore the graph structure
+    return xor_hash(p.v_to_ec,
+                    [](const pair<V, EC>& v_ec) { return xor_hash(v_ec.second, std::hash<string>()); });
 }
 
 
-//////// assumes all registers of c are non-prime
-//////set<string> prime(const set<string>& c)
-//////{
-//////    set<string> primed;
-//////    for (const auto& r : c)
-//////        primed.insert(r+"'");
-//////    return primed;
-//////}
-//////
-//////Partition Algo::compute_next(const Partition& p, const Tst& tst, const Asgn& asgn)
-//////{
-//////    /* Example:
-//////     * current = {r1=r2 < r3 < r4}
-//////     *     tst = (i<o, i=r2, r2<o<r3)
-//////     *    asgn = {o->{r2}, i->{r3}}
-//////     *
-//////     *    next = {r1=r3 < r2 < r4}
-//////     *
-//////     * The algorithm is:
-//////     * 1. create the partition over R ∪ DataVars:
-//////     *    r1=r2=i < o < r3 < r4
-//////     * 2. add R' variables wrt. asgn:
-//////     *    r1=r2=i=r1'=r3' < o=r2' < r3 < r4=r4'
-//////     * 3. Project into R':
-//////     *    r1'=r3' < r2' < r4'
-//////     * 4. Un-prime:
-//////     *    r1=r3 < r2 < r4
-//////     */
-//////
-//////    Partition result(p);
-//////
-//////    cout << "starting partition: " << p << endl
-//////         << "tst: " << tst << endl
-//////         << "asgn: " << asgn << endl;
-//////
-//////    add_data(tst, result);
-//////    cout << "p with data: " << result << endl;
-//////
-//////    add_primed(asgn, result);
-//////    cout << "p with primed: " << result << endl;
-//////
-//////    project_on_primed(result);
-//////    cout << "p projected on R': " << result << endl;
-//////
-//////    unprime(result);
-//////    cout << "p unprimed: " << result << endl;
-//////
-//////    return result;
-//////}
-//////
-//////void Algo::unprime(Partition& p)
-//////{
-//////    for (auto& c : p.repr)
-//////    {
-//////        set<string> c_old = c;
-//////        c.clear();
-//////        for (const auto& r : c_old)
-//////        {
-//////            MASSERT(r.at(0) == 'r' and r.at(r.size()-1) == '\'', r);
-//////            c.insert(r.substr(0, r.size() - 1));  // removing ' in r'
-//////        }
-//////    }
-//////}
-//////
-//////void Algo::project_on_primed(Partition& p)
-//////{
-//////    // modify p by projecting into R' (i.e., remove all others)
-//////    for (auto c_it = p.repr.begin(); c_it != p.repr.end(); )
-//////    {
-//////        for (auto r_it = c_it->begin(); r_it != c_it->end(); )
-//////            // remove non-primed variables and update the for-loop iterator r_it
-//////            if (r_it->at(r_it->size()-1) != '\'')
-//////                r_it = c_it->erase(r_it);
-//////            else
-//////                r_it++;
-//////        // remove the class if empty, and update the for-loop iterator c_it
-//////        if (c_it->empty())
-//////            c_it = p.repr.erase(c_it);
-//////        else
-//////            c_it++;
-//////    }
-//////}
-//////
-//////void Algo::add_primed(const Asgn& asgn, Partition& p_with_data)
-//////{
-//////    // update p with primed registers according to asgn
-//////
-//////    // 1. add to the classes of d also their d->{r1,r2} (but prime them)
-//////    set<string> assignedR;
-//////    for (const auto& d_ac : asgn.asgn)
-//////    {
-//////        auto d = d_ac.first;
-//////        auto asgnC = d_ac.second;
-//////        auto primedAsgnC = prime(asgnC);
-//////        p_with_data.get_class_of(d).insert(primedAsgnC.begin(), primedAsgnC.end());
-//////
-//////        assignedR.insert(asgnC.begin(), asgnC.end());  // (will be used in future)
-//////    }
-//////
-//////    // 2: for unchanged r, add r' to the class of r
-//////    set<string> unchanged = a_minus_b(p_with_data.getR(), assignedR);
-//////    for (const auto& r : unchanged)
-//////        p_with_data.get_class_of(r).insert(r + "'");
-//////}
-//////
-///////* create the partition over R ∪ DataVars */
-//////void Algo::add_data(const Tst& tst, Partition& p)
-//////{
-//////    for (const set<string>& d_class : tst.data_partition.repr)  // e.g., iterating over [{i}, {o}]
-//////    {
-//////        string d = *d_class.begin();  // take _any_ d from the equivalence class {i} (if we had tst = (i=o, ...), the we could arbitrary choose i or o)
-//////        Cmp d_cmp = tst.data_to_cmp.at(d);  // note that all elements from the same class have the same cmp.
-//////        if (d_cmp.is_EQUAL())  // ... of the form *=r2
-//////        {
-//////            p.get_class_of(d_cmp.rL).insert(d_class.begin(), d_class.end());  // insert all d into the same class
-//////        }
-//////        else if (d_cmp.is_BELOW())
-//////        {
-//////            p.repr.push_front(d_class);
-//////        }
-//////        else if (d_cmp.is_ABOVE())
-//////        {
-//////            p.repr.push_back(d_class);
-//////        }
-//////        else if (d_cmp.is_BETWEEN())  // .. the form  r1<*<r2
-//////        {
-//////            {   // debug
-//////                auto pos1 = find(p.repr.begin(), p.repr.end(), p.get_class_of(d_cmp.rL));
-//////                auto pos2 = find(p.repr.begin(), p.repr.end(), p.get_class_of(d_cmp.rU));
-//////                auto dist = distance(pos1, pos2);
-//////                MASSERT(dist>0, "for cmp rL<*<rU, rL must be smaller than rU: " << p);
-//////            }
-//////            // we need to find the right place in p_with_data: we insert right before rU.
-//////            // This is correct because we traverse d0<d1<d2<d3 from smaller di-1 to larger di,
-//////            // and all previous di-1 were already inserted.
-//////            auto pos = find(p.repr.begin(), p.repr.end(), p.get_class_of(d_cmp.rU));
-//////
-//////            p.repr.insert(pos, d_class);   // `list::insert` inserts _before_ pos
-//////        }
-//////        else
-//////            MASSERT(0, "unknown type of cmp: " << d_cmp);
-//////    }
-//////}
+bool FullPartitionHelper::equal(const Partition& p1, const Partition& p2)
+{
+    // TODO: merge with the loop below (bcz it is expensive)
+    MASSERT(is_line(p1.g), "assumption 'graph is line' is violated: " << p1.g);
+    MASSERT(is_line(p2.g), "assumption 'graph is line' is violated: " << p2.g);
+
+    if (p1.g.get_vertices().size() != p2.g.get_vertices().size())
+        return false;
+
+    if (calc_hash(p1) != calc_hash(p2))
+        return false;
+
+    auto v1 = get_root(p1.g).value();
+    auto v2 = get_root(p2.g).value();
+
+    while (true)
+    {
+        if (p1.v_to_ec.at(v1) != p2.v_to_ec.at(v2))
+            return false;
+        if (p1.g.get_children(v1).empty())    // finished all iterations
+            return true;
+        v1 = *p1.g.get_children(v1).begin();
+        v2 = *p2.g.get_children(v2).begin();  // exists by the assumption of being a line
+    }
+
+    MASSERT(0, "unreachable");
+}
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

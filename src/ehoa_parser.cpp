@@ -18,10 +18,8 @@ using namespace std;
 using namespace sdf;
 
 
-// helpers
 vector<string> get_controllable_APs(const string& hoa_file_name);
 bool get_synt_moore_flag(const string& hoa_file_name);
-//
 
 
 std::tuple<spot::twa_graph_ptr, std::set<spot::formula>, std::set<spot::formula>, bool>
@@ -30,16 +28,13 @@ sdf::read_ehoa(const string& hoa_file_name)
     // the parser assumes that the hoa file contains the additional lines:
     // "controllable-AP: 1 2 3"  <-- this lines describes the indices of controllable APs
     // "synt-moore: true" [optional] <-- describes if we need to synthesise Moore machines (also: "true" can be "false")
-    std::set<spot::formula> inputs, outputs;
-    spot::twa_graph_ptr aut;
-    bool synt_moore;
-    //
 
     spot::bdd_dict_ptr dict = spot::make_bdd_dict();
     spot::parsed_aut_ptr pa = parse_aut(hoa_file_name, dict);
-    { MASSERT(!pa->aborted, ""); stringstream ss; if (pa->format_errors(ss)) MASSERT(0, ss.str()); }
-    aut = pa->aut;
+    { MASSERT(!pa->aborted, ""); if (stringstream ss; pa->format_errors(ss)) MASSERT(0, ss.str()); }
+    auto aut = pa->aut;
 
+    std::set<spot::formula> inputs, outputs;
     vector<string> controllableAPs = get_controllable_APs(hoa_file_name);
     for (auto& ap : aut->ap())
         if (contains(controllableAPs, ap.ap_name()))
@@ -47,9 +42,9 @@ sdf::read_ehoa(const string& hoa_file_name)
         else
             inputs.insert(ap);
 
-    synt_moore = get_synt_moore_flag(hoa_file_name);
+    auto synt_moore = get_synt_moore_flag(hoa_file_name);
 
-    return make_tuple(aut, inputs, outputs, synt_moore);
+    return {aut, inputs, outputs, synt_moore};
 }
 
 vector<string> get_APs(const string& hoa_file_name)
@@ -80,20 +75,21 @@ vector<string> get_controllable_APs(const string& hoa_file_name)
 {
     vector<string> APs = get_APs(hoa_file_name);
 
-    vector<string> controllableAPs;
     ifstream f(hoa_file_name);
     for (string l; getline(f, l);)
     {
         l = trim_spaces(l);
-        if (l.find("controllable-AP") == 0)
+        if (l.find(CONTROLLABLE_AP_TKN) == 0)
         {
+            vector<string> controllableAPs;
             auto tokens = split_by_space(l);  // tokens are: "controllable-AP:", "0", "2", etc.
             for (auto it = tokens.begin() + 1; it != tokens.end(); ++it)
                 controllableAPs.push_back(APs[stoi(*it)]);
             return controllableAPs;
         }
     }
-    MASSERT(0, "unreachable");
+    // reaching here means CONTROLLABLE_AP_TKN is missing alltogether (allowed).
+    return {};
 }
 
 bool get_synt_moore_flag(const string& hoa_file_name)
@@ -102,7 +98,7 @@ bool get_synt_moore_flag(const string& hoa_file_name)
     for (string l; getline(f, l);)
     {
         l = trim_spaces(l);
-        if (l.find("synt-moore") == 0)
+        if (l.find(SYNT_MOORE_TKN) == 0)
         {
             auto tokens = split_by_space(l);
             MASSERT(tokens.size() == 2, "expected the line 'synt-moore: value'");
