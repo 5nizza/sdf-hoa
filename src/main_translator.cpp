@@ -137,6 +137,8 @@ int main(int argc, const char *argv[])
     // since SPOT may remove unnecessary APs, we copy the original ones
     auto result_atm = post.run(classical_ucw);
     result_atm->copy_ap_of(classical_ucw);
+    if (!pph and !ppm) // other optimizations can remove states
+        result_atm->copy_state_names_from(classical_ucw);
     INF("result: nof_states = " << result_atm->num_states() << ", nof_edges = " << result_atm->num_edges());
 
     INF("outputting to " << output_file_name);

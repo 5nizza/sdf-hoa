@@ -106,9 +106,7 @@ size_t FullPartitionHelper::calc_hash(const Partition& p)
 
 bool FullPartitionHelper::equal(const Partition& p1, const Partition& p2)
 {
-    // TODO: merge with the loop below (bcz it is expensive)
-    MASSERT(is_line(p1.g), "assumption 'graph is line' is violated: " << p1.g);
-    MASSERT(is_line(p2.g), "assumption 'graph is line' is violated: " << p2.g);
+    // NOTE: assumes that both graphs are lines; but the check is omitted as it is expensive.
 
     if (p1.g.get_vertices().size() != p2.g.get_vertices().size())
         return false;

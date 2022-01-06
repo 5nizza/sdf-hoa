@@ -123,7 +123,7 @@ hset<string> build_sysR(uint nof_sys_regs)
 {
     hset<string> result;
     for (uint i = 1; i<= nof_sys_regs; ++i)
-        result.insert("r" + to_string(i));
+        result.insert("rs" + to_string(i));
     return result;
 }
 
@@ -210,7 +210,7 @@ vector<formula> get_cubes(const formula& f)
 }
 
 
-void classify_literal(formula f,
+void classify_literal(const formula& f,
                       hset<formula>& APs,
                       hset<formula>& cmp_atoms,
                       hset<formula>& asgn_atoms)
@@ -235,7 +235,7 @@ void classify_literal(formula f,
 
 /* @return finite-alphabet APs, cmp_atoms, asgn_atoms */
 tuple<hset<formula>, hset<formula>, hset<formula>>
-separate(formula cube)
+separate(const formula& cube)
 {
     if (cube.is_tt())
         return {{}, {}, {}};
@@ -508,78 +508,44 @@ Partition remove_io_from_p(const Partition& p)
     return Partition(new_g, new_v_to_ec);
 }
 
-// Extract a system test from the partition.
-// Return one of: *=r, r1<*<r2, *<r, r<*
-// Note: we extract a partial test (i.e. wrt subset of registers)
-//       instead of the full one (wrt. _all_ registers),
-//       but that is sound/complete. The latter fact is because
-//       we can completely restore the full tests from the created
-//       partial tests (remember that sys partitions behave deterministically).
+// Extract the full system test from a given partition.
 formula extract_sys_tst_from_p(const Partition& p, const hset<string>& sysR)
 {
     auto v_IN = get_vertex_of(IN, p.g, p.v_to_ec);
     auto ec_IN = p.v_to_ec.at(v_IN);
 
-    auto get_sys_r = [&sysR](const EC& ec)
-            {
-                for(const auto& r : sysR)
-                    if (ec.count(r))
-                        return optional<string>(r);
-                return optional<string>();
-            };
+    auto result = formula::tt();
 
-    // try *=r
-    if (auto r = get_sys_r(ec_IN); r.has_value())
-        return formula::And({ctor_sys_tst_inp_equal_r(r.value()),
-                             formula::Not(ctor_sys_tst_inp_smaller_r(r.value()))});
-
-    // reaching here means r1<*<r2 or r<* or *<r
-
-    // the code below assumes that p has a linear order and where every node has a single child,
-    // so first we check this assumption indeed holds
-    for (auto vvv : p.g.get_vertices())
-        MASSERT(p.g.get_children(vvv).size() <= 1, "we assume the minimality of a linear ordering in the graph of p");
-
-    auto get_tightest_r = [&](const vector<V>& successors)
-            {
-                for (auto s : successors)  // iterate in the order of distance from v
-                {
-                    auto r = get_sys_r(p.v_to_ec.at(s));
-                    if (r.has_value())
-                        return r;
-                }
-                return optional<string>();
-            };
-
-    // getting the tightest system r from below
-    vector<V> descendants;
-    GA::get_descendants(p.g, v_IN, [&descendants](const V& v){descendants.push_back(v);});
-    optional<string> r_below = get_tightest_r(descendants);
-
-    // getting the tightest system r from above
-    vector<V> ancestors;
-    GA::get_ancestors(p.g, v_IN, [&ancestors](const V& v){ancestors.push_back(v);});
-    optional<string> r_above = get_tightest_r(ancestors);
-
-    MASSERT(r_below.has_value() || r_above.has_value(), "not possible");
-
-    formula result = formula::tt();
-
-    if (r_below.has_value())
+    // components for *=r
     {
-        // "r_below < *", encoded as !(in<r) & !(in=r)
-        result = formula::And({formula::Not(ctor_sys_tst_inp_smaller_r(r_below.value())),
-                               formula::Not(ctor_sys_tst_inp_equal_r(r_below.value()))
-                               });
+        for (const auto& r: a_intersection_b(sysR, ec_IN))
+            result = formula::And({result, ctor_sys_tst_inp_equal_r(r)});
     }
 
-    if (r_above.has_value())
+    // getting system registers below *
     {
-        // "* < r_above"
-        result = formula::And({result,
-                               ctor_sys_tst_inp_smaller_r(r_above.value()),
-                               formula::Not(ctor_sys_tst_inp_equal_r(r_above.value()))
-                               });
+        hset<V> descendants;
+        GA::get_descendants(p.g, v_IN, [&descendants](const V& v) { descendants.insert(v); });
+        for (const auto& v: descendants)
+            for (const auto& r: a_intersection_b(sysR, p.v_to_ec.at(v)))
+                // r<* is encoded as !(in=r) & !(in<r)
+                result = formula::And({result,
+                                       formula::Not(ctor_sys_tst_inp_equal_r(r)),
+                                       formula::Not(ctor_sys_tst_inp_smaller_r(r))
+                                      });
+    }
+
+    // getting system registers above *
+    {
+        hset<V> ancestors;
+        GA::get_ancestors(p.g, v_IN, [&ancestors](const V& v) { ancestors.insert(v); });
+        for (const auto& v: ancestors)
+            for (const auto& r: a_intersection_b(sysR, p.v_to_ec.at(v)))
+                // r>* is encoded as !(in=r) & (in<r)
+                result = formula::And({result,
+                                       formula::Not(ctor_sys_tst_inp_equal_r(r)),
+                                       ctor_sys_tst_inp_smaller_r(r)
+                                      });
     }
 
     return result;
@@ -716,6 +682,7 @@ sdf::reduce(const twa_graph_ptr& reg_ucw_, uint nof_sys_regs)
               "qp_processed.size() = " << qp_processed.size());
 
         auto qp = pop_first<pair<uint, Partition>>(qp_todo);
+        auto c_of_qp = get_c(qp);
         qp_processed.insert(qp);
 
         for (const auto& e: reg_ucw->out(qp.first))
@@ -771,7 +738,7 @@ sdf::reduce(const twa_graph_ptr& reg_ucw_, uint nof_sys_regs)
                                                   extract_sys_tst_from_p(p_io, sysR),
                                                   R_to_formula(all_r),
                                                   formula::And(vector<formula>(APs.begin(), APs.end()))});
-                        new_ucw->new_edge(get_c(qp), get_c(qp_succ),
+                        new_ucw->new_edge(c_of_qp, get_c(qp_succ),
                                           spot::formula_to_bdd(cond, new_ucw->get_dict(), new_ucw),
                                           e.acc);
 
