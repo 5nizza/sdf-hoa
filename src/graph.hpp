@@ -115,8 +115,6 @@ public:
     bool operator==(const Graph& rhs) const { return children_by_v == rhs.children_by_v && parents_by_v == rhs.parents_by_v; }
     bool operator!=(const Graph& rhs) const { return !(rhs == *this); }
 
-    size_t calc_hash() const;
-
     friend std::ostream& operator<<(std::ostream&, const Graph&);
 
     friend struct GraphAlgo;

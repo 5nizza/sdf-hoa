@@ -6,7 +6,7 @@
 
 #include "utils.hpp"
 #include "synthesizer.hpp"
-#include "reg_reduction.hpp"
+#include "reg/reg_reduction.hpp"
 
 
 using namespace std;

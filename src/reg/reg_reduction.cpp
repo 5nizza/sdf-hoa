@@ -1,18 +1,19 @@
 #include "reg_reduction.hpp"
 
+#include "ord_partition.hpp"
+#include "asgn.hpp"
 #include "ehoa_parser.hpp"
 #include "utils.hpp"
-#include "partition_tst_asgn.hpp"
 #include "graph.hpp"
 #include "graph_algo.hpp"
 
 // for tests in tmp()
-#include <spot/tl/parse.hh>
+#include "spot/tl/parse.hh"
 
 
 #define BDD spotBDD
-    #include <spot/twaalgos/dot.hh>
-    #include <spot/twa/formula2bdd.hh>
+    #include "spot/twaalgos/dot.hh"
+    #include "spot/twa/formula2bdd.hh"
 #undef BDD
 
 
@@ -33,6 +34,7 @@ static const string TST_CMP_TOKENS[] = {"=","≠","<",">","≤","≥"};  // NOLI
 
 static const string IN = "in";    // NOLINT
 static const string OUT = "out";  // NOLINT
+static const string RS = "rs";    // NOLINT
 
 /*
  * A test atom has the form:
@@ -123,14 +125,15 @@ hset<string> build_sysR(uint nof_sys_regs)
 {
     hset<string> result;
     for (uint i = 1; i<= nof_sys_regs; ++i)
-        result.insert("rs" + to_string(i));
+        result.insert(RS + to_string(i));
     return result;
 }
 
 
-bool is_input_name(const string& name) { return name.substr(0,2) == IN; }
-bool is_output_name(const string& name) { return name.substr(0,3) == OUT; }
-bool is_reg_name(const string& name) { return name[0] == 'r'; }
+bool is_input_name(const string& name)   { return name.length() >= 2 and name.substr(0,2) == IN; }
+bool is_output_name(const string& name)  { return name.length() >= 3 and name.substr(0,3) == OUT; }
+bool is_reg_name(const string& name)     { return name.length() >  0 and name[0] == 'r'; }
+bool is_sys_reg_name(const string& name) { return name.length() >= RS.length() and name.substr(0,RS.length()) == RS; }
 
 
 /* Extract t1,t2,◇ from  t1◇t2 */
@@ -298,7 +301,7 @@ V get_vertex_of(const string& var,
 
 /* Returns the partial partition constructed from p and atm_tst_atoms (if possible).
  * Assumes atm_tst_atoms are of the form "<" or "=", or the test is True, but not "≤" nor "≠".  */
-optional<Partition> compute_partial_p_io(const Partition& p, const hset<formula>& atm_tst_atoms)
+optional<OrdPartition> compute_partial_p_io(const OrdPartition& p, const hset<formula>& atm_tst_atoms)
 {
     // copy
     Graph g = p.g;
@@ -337,21 +340,21 @@ optional<Partition> compute_partial_p_io(const Partition& p, const hset<formula>
     if (GA::has_cycles(g))
         return {};
 
-    return Partition(g, v_to_ec);
+    return OrdPartition(g, v_to_ec);
 }
 
 
-Partition build_init_partition(const hset<string>& sysR, const hset<string>& atmR)
+OrdPartition build_init_partition(const hset<string>& sysR, const hset<string>& atmR)
 {
     Graph g;
     g.add_vertex(0);
     hmap<V, EC> v_to_ec;
     v_to_ec.insert({0, a_union_b(sysR, atmR)});
 
-    return Partition(g, v_to_ec);
+    return OrdPartition(g, v_to_ec);
 }
 
-// convert "≥" into "= or >", similarly for "≠"
+// convert "≥" into "= or >", convert "≠" into "< or >"
 // note: the test "True" is handled later
 twa_graph_ptr preprocess(const twa_graph_ptr& reg_ucw)
 {
@@ -429,16 +432,38 @@ twa_graph_ptr preprocess(const twa_graph_ptr& reg_ucw)
     return g;
 }
 
-vector<Partition> compute_all_p_io(const Partition& partial_p_io)
+vector<OrdPartition> compute_all_p_io(const OrdPartition& partial_p_io)
 {
-    vector<Partition> result;
+    vector<OrdPartition> result;
     for (auto&& [new_g,mapper] : GA::all_topo_sorts2(partial_p_io.g))
     {
+//        auto is_implementable = true;
         hmap<V,EC> new_v_to_ec;
         for (auto&& [new_v,set_of_old_v] : mapper)
-            for (auto&& old_v : set_of_old_v)
-                for (auto&& r : partial_p_io.v_to_ec.at(old_v))
+        {
+            for (auto&& old_v: set_of_old_v)
+                for (auto&& r: partial_p_io.v_to_ec.at(old_v))
                     new_v_to_ec[new_v].insert(r);
+
+//            for (const auto& e : new_v_to_ec[new_v])
+//                if (is_output_name(e))
+//                {
+//                    is_implementable = any_of(new_v_to_ec[new_v].begin(), new_v_to_ec[new_v].end(),
+//                                              [](auto&& other)
+//                                              {
+//                                                  return is_input_name(other) || is_sys_reg_name(other);
+//                                              });
+//                    if (!is_implementable)
+//                        break;
+//                }
+//
+//            if (!is_implementable)
+//                break;
+        }
+
+//        if (!is_implementable)
+//            continue;
+
         result.emplace_back(new_g, new_v_to_ec);
     }
     return result;
@@ -452,7 +477,7 @@ vector<Partition> compute_all_p_io(const Partition& partial_p_io)
   NB: the partition is assumed to be complete, yet there might still be several different possible r:
       when they all reside in the same EC.
 */
-hset<string> pick_R(const Partition& p_io, const hset<string>& sysR)
+hset<string> pick_R(const OrdPartition& p_io, const hset<string>& sysR)
 {
     hset<string> result;
     for (const auto& [v,ec] : p_io.v_to_ec)
@@ -461,7 +486,7 @@ hset<string> pick_R(const Partition& p_io, const hset<string>& sysR)
     return {};
 }
 
-Partition update(const Partition& p, const Asgn& asgn)
+OrdPartition update(const OrdPartition& p, const Asgn& asgn)
 {
     auto new_g = p.g;  // copy
     auto new_v_to_ec = p.v_to_ec;
@@ -486,11 +511,11 @@ Partition update(const Partition& p, const Asgn& asgn)
         }
     }
 
-    return Partition(new_g, new_v_to_ec);
+    return OrdPartition(new_g, new_v_to_ec);
 }
 
 
-Partition remove_io_from_p(const Partition& p)
+OrdPartition remove_io_from_p(const OrdPartition& p)
 {
     auto new_v_to_ec = p.v_to_ec;
     auto new_g = p.g;
@@ -505,11 +530,11 @@ Partition remove_io_from_p(const Partition& p)
             new_v_to_ec.erase(v);
         }
     }
-    return Partition(new_g, new_v_to_ec);
+    return OrdPartition(new_g, new_v_to_ec);
 }
 
 // Extract the full system test from a given partition.
-formula extract_sys_tst_from_p(const Partition& p, const hset<string>& sysR)
+formula extract_sys_tst_from_p(const OrdPartition& p, const hset<string>& sysR)
 {
     auto v_IN = get_vertex_of(IN, p.g, p.v_to_ec);
     auto ec_IN = p.v_to_ec.at(v_IN);
@@ -579,18 +604,18 @@ formula R_to_formula(const hset<string>& all_r)
 struct QPHashEqual
 {
     // operator `hash`
-    size_t operator()(const pair<uint, Partition>& qp) const
+    size_t operator()(const pair<uint, OrdPartition>& qp) const
     {
         return pair_hash<uint,
-                         Partition,
+                         OrdPartition,
                          std::hash<uint>,
-                         FullPartitionHelper>()(qp);
+                         TotalOrdPartitionHelper>()(qp);
     }
 
     // operator `equal`
-    bool operator()(const pair<uint, Partition>& qp1, const pair<uint, Partition>& qp2) const
+    bool operator()(const pair<uint, OrdPartition>& qp1, const pair<uint, OrdPartition>& qp2) const
     {
-        return (qp1.first == qp2.first && FullPartitionHelper::equal(qp1.second, qp2.second));
+        return (qp1.first == qp2.first && TotalOrdPartitionHelper::equal(qp1.second, qp2.second));
     }
 };
 
@@ -607,6 +632,8 @@ formula create_MUTEXCL_violation(const set<formula>& props_);
 void add_edge_to_every_state(twa_graph_ptr& atm,
                              uint dst_state,
                              const formula& label);
+
+bool out_is_implementable(const OrdPartition& partition);
 
 tuple<twa_graph_ptr,  // new_ucw
       set<formula>,   // sysTst
@@ -639,10 +666,10 @@ sdf::reduce(const twa_graph_ptr& reg_ucw_, uint nof_sys_regs)
     // -- the main part --
     // The register-naming convention (hard-coded) is:
     // - system registers are rs1, rs2, ..., rsK
-    // - automaton registers are r1, r2, ... (NOT TRUE: I JUST EXTRACT WHATEVER THE AUTOMATON USES!)
+    // - automaton registers are WHATEVER THE AUTOMATON USES! (I do check that Rs \cap Ra = empty)
 
-    hmap<pair<uint, Partition>, uint, QPHashEqual, QPHashEqual> qp_to_c;
-    auto get_c = [&qp_to_c, &new_ucw](const pair<uint, Partition>& qp)
+    hmap<pair<uint, OrdPartition>, uint, QPHashEqual, QPHashEqual> qp_to_c;
+    auto get_c = [&qp_to_c, &new_ucw](const pair<uint, OrdPartition>& qp)
             {
                 // helper function: get (and create if necessary) a state
                 if (auto it = qp_to_c.find(qp); it != qp_to_c.end())
@@ -669,19 +696,20 @@ sdf::reduce(const twa_graph_ptr& reg_ucw_, uint nof_sys_regs)
                 return new_c;
             };
 
-    unordered_set<pair<uint, Partition>,QPHashEqual,QPHashEqual> qp_processed;
-    hset<pair<uint, Partition>,QPHashEqual,QPHashEqual> qp_todo;
+    hset<pair<uint, OrdPartition>,QPHashEqual,QPHashEqual>
+            qp_processed, qp_todo;
 
     auto init_qp = make_pair(reg_ucw->get_init_state_number(), build_init_partition(sysR, atmR));
     new_ucw->set_init_state(get_c(init_qp));
     qp_todo.insert(init_qp);
 
+    int i=0, j=0;
     while (!qp_todo.empty())
     {
         DEBUG("qp_todo.size() = " << qp_todo.size() << ", "
               "qp_processed.size() = " << qp_processed.size());
 
-        auto qp = pop_first<pair<uint, Partition>>(qp_todo);
+        auto qp = pop_first<pair<uint, OrdPartition>>(qp_todo);
         auto c_of_qp = get_c(qp);
         qp_processed.insert(qp);
 
@@ -695,8 +723,8 @@ sdf::reduce(const twa_graph_ptr& reg_ucw_, uint nof_sys_regs)
             for (const auto& cube : get_cubes(e_f))
             {
                 /*  // NB: we assume that partitions are complete, which simplifies the algorithm.
-                    let partial_p_io = compute_partial_p_io(p, atm_tst_atoms) // partition is complete but tst is partial
-                    let all_p_io = compute_all_p_io(partial_p_io)             // <-- (should be possible to incorporate sys_asgn-out_r enumeration)
+                    let partial_p_io = compute_partial_p_io(p, atm_tst_atoms) // p is complete, tst is partial => result is a partial partition
+                    let all_p_io = compute_all_p_io(partial_p_io)             // <-- (should be possible to incorporate sys_asgn-out_r enumeration, but good enough now)
                     for every p_io in all_p_io:
                         for every sys_asgn:
                             let p_io' = update(p_io, sys_asgn)                // update Rs
@@ -716,18 +744,30 @@ sdf::reduce(const twa_graph_ptr& reg_ucw_, uint nof_sys_regs)
                     continue;
                 for (const auto& p_io : compute_all_p_io(partial_p_i.value()))
                 {
+                    // early break:
+                    // if o does not belong to the class of i or some sys_reg,
+                    // then o cannot be realised
+                    if (!out_is_implementable(p_io))
+                        continue;
+
 //                    cout << "p_io: " << p_io << ", sys_tst: " << extract_sys_tst_from_p(p_io, sysR) << endl;
+//                    vector<vector<formula>> all_assignments;
+//                    all_assignments.emplace_back();  // means "emplace the default ctor element"
+//                    for (auto&&  reg : sysAsgn)
+//                        all_assignments.push_back({reg});
+//                    for (const auto& sys_asgn_atoms : all_assignments)  // this give 2x speedup _only_
                     for (const auto& sys_asgn_atoms : all_subsets<formula>(sysAsgn))
                     {
+                        j++;
                         auto sys_asgn = compute_asgn(sys_asgn_atoms);
                         auto p_io_ = update(p_io, sys_asgn);
                         auto all_r = pick_R(p_io_, sysR);
-//                        cout << "sys_asgn: " << sys_asgn << endl;
-//                        cout << "all_r: " << join(", ", all_r) << endl;
-//                        cout << endl;
                         // p_io is complete, hence we should continue only if `o` lies in one of ECs with system regs in it
                         if (all_r.empty())
+                        {
+                            i++;
                             continue;
+                        }
                         auto p_io__ = update(p_io_, atm_asgn);  // NOLINT(bugprone-reserved-identifier)
                         auto p_succ = remove_io_from_p(p_io__);
 
@@ -762,8 +802,22 @@ sdf::reduce(const twa_graph_ptr& reg_ucw_, uint nof_sys_regs)
     // now add the edges
     add_edge_to_every_state(new_ucw, rej_sink, create_MUTEXCL_violation(sysOutR));
 
+    cout << "#iterations: " << j << ", #breaks: " << i << ", use ratio: " << ((float)(j-i))/j << endl;
+
     return {new_ucw, sysTst, sysAsgn, sysOutR};
 }
+
+/* returns false iff o does not belong to a class of i or of some sys register */
+bool out_is_implementable(const OrdPartition& partition)
+{
+    for (auto&& [v,ec] : partition.v_to_ec)
+        for (const auto& e : ec)
+            if (is_output_name(e))
+                return any_of(ec.begin(), ec.end(), [](auto&& other) {return is_input_name(other) || is_sys_reg_name(other);});
+
+    throw logic_error("not possible");
+}
+
 
 /* Add an edge labelled `label` into `dst_state` from every state except `dst_state` itself. */
 void add_edge_to_every_state(twa_graph_ptr& atm,
@@ -777,6 +831,7 @@ void add_edge_to_every_state(twa_graph_ptr& atm,
         atm->new_edge(s, dst_state, spot::formula_to_bdd(label, atm->get_dict(), atm));
     }
 }
+
 
 formula create_MUTEXCL_violation(const set<formula>& props_)
 {
@@ -794,20 +849,24 @@ void sdf::tmp()
 {
     Graph g1;
     g1.add_vertex(1);
+    g1.add_vertex(2);
+    g1.add_edge(1,2);
     auto v_to_ec1 = hmap<Graph::V, hset<string>>(
-            {{1, {"b", "a"}}});
+            {{1, {"a"}},{2, {"b"}}});
 
     Graph g2;
     g2.add_vertex(1);
+//    g2.add_vertex(2);
+//    g2.add_edge(1,2);
     auto v_to_ec2 = hmap<Graph::V, hset<string>>(
             {{1, {"a", "b"}}});
 
-    auto p1 = Partition(g1, v_to_ec1);
-    auto p2 = Partition(g2, v_to_ec2);
+    auto p1 = OrdPartition(g1, v_to_ec1);
+    auto p2 = OrdPartition(g2, v_to_ec2);
 
-    cout << FullPartitionHelper::calc_hash(p1) << endl << FullPartitionHelper::calc_hash(p2) << endl;
-    cout << FullPartitionHelper::equal(p1, p2) << endl;
-
+    cout << "hash of 0: " << std::hash<size_t>()(0) << endl;
+    cout << TotalOrdPartitionHelper()(p1) << endl << TotalOrdPartitionHelper()(p2) << endl;
+    cout << TotalOrdPartitionHelper::equal(p1, p2) << endl;
 
     /*
     Graph g1 ({{1,2},{2,3}});

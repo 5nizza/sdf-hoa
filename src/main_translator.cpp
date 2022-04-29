@@ -6,8 +6,9 @@
 
 #include "utils.hpp"
 #include "synthesizer.hpp"
-#include "reg_reduction.hpp"
+#include "reg/reg_reduction.hpp"
 #include "ehoa_parser.hpp"
+#include "timer.hpp"
 
 #define BDD spotBDD
     #include <spot/twaalgos/dot.hh>
@@ -34,6 +35,7 @@ vector<uint> get_hoaIDs_of_outputs(const spot::twa_graph_ptr& atm,
 
 int main(int argc, const char *argv[])
 {
+    Timer timer;
     auto logger = spdlog::get("console");
 
     args::ArgumentParser parser("Reductor from reg-UCW to classical UCW (in HOA format)");
@@ -121,8 +123,11 @@ int main(int argc, const char *argv[])
     auto [reg_ucw, inputs, outputs, is_moore] = read_ehoa(hoa_file_name);
     INF("input automaton: nof_states = " << reg_ucw->num_states() << ", nof_edges = " << reg_ucw->num_edges());
 
-    auto [classical_ucw, sysTst, sysAsgn, sysOutR] = reduce(reg_ucw, b);
+    /* -------------------------------------------------------------------------- */
+    auto [classical_ucw, sysTst, sysAsgn, sysOutR] =
+            reduce(reg_ucw, b);
     DEBUG("completed: unprocessed: nof_states = " << classical_ucw->num_states() << ", nof_edges = " << classical_ucw->num_edges());
+    /* -------------------------------------------------------------------------- */
 
     classical_ucw->merge_edges();
     classical_ucw->merge_states();
@@ -167,6 +172,7 @@ int main(int argc, const char *argv[])
         }
         fs.close();
     }
+    INF("total execution time (sec.): " << timer.sec_from_origin());
     return 0;
 }
 

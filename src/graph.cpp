@@ -7,14 +7,6 @@ using namespace sdf;
 using namespace std;
 
 
-size_t Graph::calc_hash() const
-{
-    return xor_hash(get_vertices(),
-                    [&](const V& v) {return hash<V>()(v) ^ xor_hash(get_children(v), hash<V>());});
-    // hash_of_the_vertex ^ hash_of_the_children_container
-}
-
-
 namespace graph
 {
 std::ostream& operator<<(ostream& out, const Graph& g)

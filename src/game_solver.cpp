@@ -212,7 +212,7 @@ vector<BDD> sdf::GameSolver::get_substitution()
 }
 
 
-vector<string> &split(const string &s, char delim, vector<string> &elems)
+vector<string>& split(const string &s, char delim, vector<string> &elems)
 {
     stringstream ss(s);
     string item;
@@ -473,7 +473,8 @@ BDD sdf::GameSolver::pre_sys(BDD dst) {
 
 BDD sdf::GameSolver::calc_win_region()
 {
-    /** Calculate a winning region for the safety game: win = greatest_fix_point.X [not_error & pre_sys(X)]
+    /** Calculate the winning region of a safety game:
+            win = greatest_fix_point.X [not_error & pre_sys(X)]
         :return: BDD representing the winning region
     **/
 

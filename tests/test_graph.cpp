@@ -116,63 +116,67 @@ TEST(GraphTest, HasCycles)
     ASSERT_TRUE(GraphAlgo::has_cycles(g));
 }
 
-namespace std { template<> struct hash<Graph> { size_t operator()(const Graph& g) const { return g.calc_hash(); } }; }
 
-hset<Graph> set_ctor(const vector<Graph>& graphs) { return hset<Graph>(graphs.begin(), graphs.end()); }
+template<class ContainerT1, class ContainerT2>
+void assert_equal_content(const ContainerT1& c1, const ContainerT2& c2)
+{
+    for (const auto& e : c1)
+        if (find(c2.begin(), c2.end(), e) == c2.end())
+            ASSERT_TRUE(false) << "container 1 has a value not present in container 2" << endl;
+
+    for (const auto& e : c2)
+        if (find(c1.begin(), c1.end(), e) == c1.end())
+            ASSERT_TRUE(false) << "container 2 has a value not present in container 1" << endl;
+}
+
 
 TEST(GraphTest, AllTopoSorts)
 {
-    ASSERT_EQ(set_ctor(GA::all_topo_sorts(Graph{1,2})),
-              hset<Graph>({Graph({{1,2}}), Graph({{2,1}})}));
+    using T = vector<Graph>;
+    assert_equal_content(GA::all_topo_sorts(Graph({1,2})),  // two vertices 1,2, no edges
+                         T{Graph({{1,2}}), Graph({{2,1}})});
 
-    ASSERT_EQ(set_ctor(GA::all_topo_sorts(Graph({{1,2}}))),
-              hset<Graph>({Graph({{1,2}})}));
+    assert_equal_content(GA::all_topo_sorts(Graph({{1,2}})),  // one edge 1->2
+                         T{Graph({{1,2}})});
 
-    ASSERT_EQ(set_ctor(GA::all_topo_sorts(Graph({{1,2}, {1,3}}))),
-              hset<Graph>({Graph({{1,2}, {2,3}}), Graph({{1,3},{3,2}})}));
+    assert_equal_content(GA::all_topo_sorts(Graph({{1,2}, {1,3}})),
+                         T{Graph({{1,2}, {2,3}}),
+                           Graph({{1,3},{3,2}})});
 
-    ASSERT_EQ(set_ctor(GA::all_topo_sorts(Graph({{1,2}, {10,20}}))),
-              hset<Graph>({Graph({{1,2}, {2,10}, {10,20}}),
+    assert_equal_content(GA::all_topo_sorts(Graph({{1,2}, {10,20}})),
+                         T{Graph({{1,2}, {2,10}, {10,20}}),
                            Graph({{1,10}, {10,2}, {2,20}}),
                            Graph({{1,10}, {10,20}, {20,2}}),
                            Graph({{10,1}, {1,20}, {20,2}}),
                            Graph({{10,20}, {20,1}, {1,2}}),
-                           Graph({{10,1}, {1,2}, {2,20}})}));
+                           Graph({{10,1}, {1,2}, {2,20}})});
 }
 
-void assert_equal_content(const vector<pair<Graph, hmap<V, hset<V>>>>& g_map_pairs1,
-                          const vector<pair<Graph, hmap<V, hset<V>>>>& g_map_pairs2)
-{
-    for (const auto& g_map : g_map_pairs1)
-        ASSERT_TRUE(find(g_map_pairs2.begin(),g_map_pairs2.end(), g_map) != g_map_pairs2.end());
-
-    for (const auto& g_map : g_map_pairs2)
-        ASSERT_TRUE(find(g_map_pairs1.begin(),g_map_pairs1.end(), g_map) != g_map_pairs1.end());
-}
 
 TEST(GraphTest, AllTopoSorts2)
 {
+    using T = vector<pair<Graph, hmap<V, hset<V>>>>;
     assert_equal_content(GA::all_topo_sorts2(Graph({1,2})),
-              {
+              T{
                 {Graph({{1,2}}), {{1,{1}},{2,{2}}}},
                 {Graph({{2,1}}), {{1,{1}},{2,{2}}}},
                 {Graph({1}), {{1,{1,2}}}}
               });
 
     assert_equal_content(GA::all_topo_sorts2(Graph({{1,2}})),
-            {
+            T{
                 {Graph({{1,2}}), {{1,{1}},{2,{2}}}}
             });
 
     assert_equal_content(GA::all_topo_sorts2(Graph({{1,2}, {1,3}})),
-                         {
+                         T{
                                  {Graph({{1,2}, {2,3}}), {{1,{1}},{2,{2}}, {3,{3}}}},
                                  {Graph({{1,3}, {3,2}}), {{1,{1}},{2,{2}}, {3,{3}}}},
                                  {Graph({{1,2}}), {{1,{1}},{2,{2,3}}}}
                          });
 
     assert_equal_content(GA::all_topo_sorts2(Graph({{1,2}, {2,3}, {1,99}})),
-                         {
+                         T{
                                  {Graph({{1,2}, {2,3}, {3,99}}), {{1,{1}},{2,{2}}, {3,{3}}, {99,{99}}}},
                                  {Graph({{1,2}, {2,99}, {99,3}}), {{1,{1}},{2,{2}}, {3,{3}}, {99,{99}}}},
                                  {Graph({{1,99}, {99,2}, {2,3}}), {{1,{1}},{2,{2}}, {3,{3}}, {99,{99}}}},

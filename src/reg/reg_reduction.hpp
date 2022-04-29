@@ -1,19 +1,21 @@
 #pragma once
 
 #include <set>
-#include <spdlog/spdlog.h>
+#include "spdlog/spdlog.h"
 
 #define BDD spotBDD
-    #include <spot/parseaut/public.hh>
-    #include <spot/twaalgos/hoa.hh>
-    #include <spot/twa/bddprint.hh>
-    #include <spot/twaalgos/translate.hh>
+    #include "spot/parseaut/public.hh"
+    #include "spot/twaalgos/hoa.hh"
+    #include "spot/twa/bddprint.hh"
+    #include "spot/twaalgos/translate.hh"
 #undef BDD
+
+#include "ord_partition.hpp"
 
 
 extern "C"
 {
-    #include <aiger.h>
+    #include "aiger.h"
 }
 
 

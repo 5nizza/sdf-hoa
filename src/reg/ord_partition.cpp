@@ -1,4 +1,4 @@
-#include "partition_tst_asgn.hpp"
+#include "ord_partition.hpp"
 
 #include <algorithm>
 #include <list>
@@ -52,7 +52,7 @@ bool is_line(const Graph& g)
 }
 
 
-std::ostream& operator<<(ostream& out, const Partition& p)
+std::ostream& operator<<(ostream& out, const OrdPartition& p)
 {
     auto convert_ec_to_str = [](const EC& ec)
     {
@@ -95,23 +95,38 @@ std::ostream& operator<<(ostream& out, const Partition& p)
     return out;
 }
 
-
-size_t FullPartitionHelper::calc_hash(const Partition& p)
+size_t OrdPartition::calc_hash_()
 {
-    // we simply ignore the graph structure
-    return xor_hash(p.v_to_ec,
-                    [](const pair<V, EC>& v_ec) { return xor_hash(v_ec.second, std::hash<string>()); });
+    // traverse the graph and computes the hash value as:
+    // SUM over: hash(depth+1) * XOR([hash(e) for e in ec(v)])
+    // we use depth+1 because hash(0)=0
+
+    function<void(V,size_t,size_t&)>
+            rec_visit = [&](V v, size_t depth, size_t& result)
+    {
+        result += std::hash<size_t>()(depth+1) * xor_hash(this->v_to_ec.at(v), std::hash<string>());
+        for (const auto& c : this->g.get_children(v))
+            rec_visit(c, depth+1, result);
+    };
+
+    auto root = get_root(g);
+    if (!root.has_value())  // such graphs correspond to invalid partitions (with cycles)
+        return 0;
+
+    size_t hash_value = 0;
+    rec_visit(root.value(), 0, hash_value);
+    return hash_value;
 }
 
 
-bool FullPartitionHelper::equal(const Partition& p1, const Partition& p2)
+bool TotalOrdPartitionHelper::equal(const OrdPartition& p1, const OrdPartition& p2)
 {
     // NOTE: assumes that both graphs are lines; but the check is omitted as it is expensive.
 
     if (p1.g.get_vertices().size() != p2.g.get_vertices().size())
         return false;
 
-    if (calc_hash(p1) != calc_hash(p2))
+    if (p1.hash_ != p2.hash_)
         return false;
 
     auto v1 = get_root(p1.g).value();

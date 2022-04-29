@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include "partition_tst_asgn.hpp"
+#include "reg/ord_partition.hpp"
 
 #include "gtest/gtest.h"
 
