@@ -10,6 +10,8 @@
 
 #define BDD spotBDD
     #include <spot/twaalgos/dot.hh>
+    #include <spot/twaalgos/translate.hh>
+//    #include <spot/parseaut/public.hh>
 #undef BDD
 
 

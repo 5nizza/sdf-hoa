@@ -7,11 +7,8 @@
 
 
 #define BDD spotBDD
-    // TODO: use instead the single inclusion: #include <spot/twa/twagraph.hh>?
-    #include "spot/parseaut/public.hh"  // WHY?
-    #include "spot/twaalgos/hoa.hh"     // WHY?
-    #include "spot/twa/bddprint.hh"     // WHY?
-    #include "spot/twaalgos/translate.hh"  // WHY?
+    #include "spot/twa/twagraph.hh"
+    #include "spot/tl/formula.hh"
 #undef BDD
 
 

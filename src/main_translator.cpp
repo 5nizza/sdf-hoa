@@ -5,17 +5,15 @@
 #include <args.hxx>
 
 #include "utils.hpp"
-#include "synthesizer.hpp"
 #include "reg/reg_reduction.hpp"
 #include "ehoa_parser.hpp"
 #include "timer.hpp"
 #include "reg/lin_order_domain.hpp"
 
 #define BDD spotBDD
-    #include <spot/twa/fwd.hh>
-    #include <spot/twa/twagraph.hh>
-    #include <spot/tl/formula.hh>
     #include <spot/twaalgos/dot.hh>
+    #include <spot/twaalgos/postproc.hh>
+    #include <spot/twaalgos/hoa.hh>
 #undef BDD
 
 

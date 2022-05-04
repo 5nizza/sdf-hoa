@@ -7,7 +7,6 @@
 
 
 #define BDD spotBDD
-    #include "spot/twaalgos/dot.hh"
     #include "spot/twa/formula2bdd.hh"
     #include "spot/tl/parse.hh"  // for tests in tmp()
 #undef BDD

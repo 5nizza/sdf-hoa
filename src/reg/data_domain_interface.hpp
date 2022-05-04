@@ -6,12 +6,9 @@
 
 #include "asgn.hpp"
 
-#define BDD spotBDD  // TODO: remove unnecessary
-    #include "spot/twa/formula2bdd.hh"
-    #include "spot/parseaut/public.hh"
-    #include "spot/twaalgos/hoa.hh"
-    #include "spot/twa/bddprint.hh"
-    #include "spot/twaalgos/translate.hh"
+#define BDD spotBDD
+    #include "spot/tl/formula.hh"
+    #include "spot/twa/twagraph.hh"
 #undef BDD
 
 

@@ -8,9 +8,9 @@
 
 
 #define BDD spotBDD
-#include <spot/tl/formula.hh>
-#include <spot/parseaut/public.hh>
-#include <spot/twaalgos/hoa.hh>
+    #include <spot/tl/formula.hh>
+    #include <spot/parseaut/public.hh>
+    #include <spot/twaalgos/hoa.hh>
 #undef BDD
 
 

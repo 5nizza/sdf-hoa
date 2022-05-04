@@ -4,6 +4,11 @@
 #include "graph.hpp"
 #include "graph_algo.hpp"
 
+#define BDD spotBDD
+    #include "spot/tl/formula.hh"
+    #include "spot/twa/twagraph.hh"
+    #include "spot/twa/formula2bdd.hh"
+#undef BDD
 
 
 using namespace std;
