@@ -5,11 +5,12 @@ list(APPEND SRC_FILES
         "ltl_parser.cpp"
         "ehoa_parser.cpp"
         "utils.cpp"
-        "reg/reg_reduction.cpp"
-        "reg/ord_partition.cpp"
         "logger_instance.cpp"
         "graph.cpp"
         "graph_algo.cpp"
+        "reg/reg_reduction.cpp"
+        "reg/ord_partition.cpp"
+        "reg/lin_order_domain.cpp"
         )
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)

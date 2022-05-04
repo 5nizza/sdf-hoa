@@ -3,14 +3,16 @@
 #include <set>
 #include "spdlog/spdlog.h"
 
-#define BDD spotBDD
-    #include "spot/parseaut/public.hh"
-    #include "spot/twaalgos/hoa.hh"
-    #include "spot/twa/bddprint.hh"
-    #include "spot/twaalgos/translate.hh"
-#undef BDD
+#include "data_domain_interface.hpp"
 
-#include "ord_partition.hpp"
+
+#define BDD spotBDD
+    // TODO: use instead the single inclusion: #include <spot/twa/twagraph.hh>?
+    #include "spot/parseaut/public.hh"  // WHY?
+    #include "spot/twaalgos/hoa.hh"     // WHY?
+    #include "spot/twa/bddprint.hh"     // WHY?
+    #include "spot/twaalgos/translate.hh"  // WHY?
+#undef BDD
 
 
 extern "C"
@@ -25,13 +27,18 @@ namespace sdf
 /**
  * Take reg-UCW and create a classical UCW for synthesis.
  * (Note: bcz twa_graph_ptr is shared_ptr, we can pass the reference and assign to it.)
+ * NB: once you implement a new data domain, instantiate this template function in reg_reduction.cpp
  */
+template<typename Partition>
 std::tuple<spot::twa_graph_ptr,      // new_ucw
            std::set<spot::formula>,  // sysTst
            std::set<spot::formula>,  // sysAsgn
            std::set<spot::formula>>  // sysOutR
-reduce(const spot::twa_graph_ptr& reg_ucw, uint nof_sys_regs);
+reduce(DataDomainInterface<Partition>& domain,
+       const spot::twa_graph_ptr& reg_ucw,
+       uint nof_sys_regs);
+
 
 void tmp();
 
-} //namespace sdf
+}  //namespace sdf

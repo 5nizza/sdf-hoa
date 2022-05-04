@@ -23,13 +23,13 @@ using Graph = graph::Graph;
 using V = Graph::V;
 
 
-struct TotalOrdPartitionHelper;
+struct TotalOrdPartitionHasher;
 
 /*
  * Partition is a graph, where v1 -> v2 means "v1>v2".
  * Each vertex describes an equivalence class, using v_to_ec mapping.
  */
-struct OrdPartition
+class OrdPartition
 {
 public:
     const Graph g;
@@ -45,20 +45,28 @@ public:
     bool operator==(const OrdPartition& rhs) const = delete;
     bool operator!=(const OrdPartition& rhs) const = delete;
 
-    // NB: quite expensive call
+    // NB: quite an expensive call
     friend std::ostream& operator<<(std::ostream& out, const OrdPartition& p);
-    friend struct TotalOrdPartitionHelper;
+    friend struct TotalOrdPartitionHasher;  // TODO: remove me
+    friend class LinOrderDomain;
 
 private:
     const size_t hash_;
-    size_t calc_hash_();  // NB: returns 0 for partitions with cycles (which is invalid)
+    size_t calc_hash_();  // NB: returns 0 for partitions with cycles (which are invalid)
 };
 
 
-struct TotalOrdPartitionHelper
-{
-    size_t operator()(const OrdPartition& p) const {return p.hash_;}
+//struct TotalOrdPartitionHelper
+//{
+//    size_t operator()(const OrdPartition& p) const {return p.hash_;}
+//
+//     assumes the graph is a line: node1 -> node2 -> ...
+//    static bool equal(const OrdPartition& p1, const OrdPartition& p2);
+//};
 
+struct TotalOrdPartitionHasher
+{
+    static size_t hash(const OrdPartition& p) {return p.hash_;}
     // assumes the graph is a line: node1 -> node2 -> ...
     static bool equal(const OrdPartition& p1, const OrdPartition& p2);
 };

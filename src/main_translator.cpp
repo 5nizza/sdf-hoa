@@ -9,8 +9,12 @@
 #include "reg/reg_reduction.hpp"
 #include "ehoa_parser.hpp"
 #include "timer.hpp"
+#include "reg/lin_order_domain.hpp"
 
 #define BDD spotBDD
+    #include <spot/twa/fwd.hh>
+    #include <spot/twa/twagraph.hh>
+    #include <spot/tl/formula.hh>
     #include <spot/twaalgos/dot.hh>
 #undef BDD
 
@@ -124,8 +128,10 @@ int main(int argc, const char *argv[])
     INF("input automaton: nof_states = " << reg_ucw->num_states() << ", nof_edges = " << reg_ucw->num_edges());
 
     /* -------------------------------------------------------------------------- */
+    auto domain = LinOrderDomain();
+    reg_ucw = domain.preprocess(reg_ucw);  // specific to LinOrderDomain
     auto [classical_ucw, sysTst, sysAsgn, sysOutR] =
-            reduce(reg_ucw, b);
+            sdf::reduce(domain, reg_ucw, b);
     DEBUG("completed: unprocessed: nof_states = " << classical_ucw->num_states() << ", nof_edges = " << classical_ucw->num_edges());
     /* -------------------------------------------------------------------------- */
 

@@ -313,6 +313,16 @@ size_t xor_hash(const Container& container, ElementHasher hasher)
 }
 
 
+template<typename T1, typename T2, typename H1, typename H2>
+size_t do_hash_pair(const std::pair<T1,T2>& x, H1 h1, H2 h2)
+{
+    size_t hash_value = 17;
+    hash_value = 31*hash_value + h1(x.first);
+    hash_value = 31*hash_value + h2(x.second);
+    return hash_value;
+}
+
+
 template<typename T, typename U, typename H1=std::hash<T>, typename H2=std::hash<U>>
 struct pair_hash
 {

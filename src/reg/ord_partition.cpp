@@ -2,11 +2,15 @@
 
 #include <algorithm>
 #include <list>
+
 #include "utils.hpp"
+#include "graph_algo.hpp"
 
 
 using namespace std;
 using namespace sdf;
+
+using GA = graph::GraphAlgo;
 
 #define hset unordered_set
 #define hmap unordered_map
@@ -15,31 +19,13 @@ using namespace sdf;
 namespace sdf
 {
 
-/** Fails if graph has none or more than one roots (a root is a vertex without predecessors). */
-optional<V> get_root(const Graph& g)
-{
-    optional<V> root;
-    for (auto v: g.get_vertices())
-    {
-        if (g.get_parents(v).empty())
-        {
-            if (root.has_value())
-                return {};  // fail
-            else
-                root = v;
-        }
-    }
-    return root;
-}
-
-
 /** Check that g has shape v1->v2->...->vEnd.
     NB: syntactic check, i.e., it returns false if the graph succession is a line
     yet syntactically it looks different.
 */
 bool is_line(const Graph& g)
 {
-    auto v_ = get_root(g);
+    auto v_ = GA::get_root(g);
     if (!v_.has_value())
         return false;
 
@@ -66,7 +52,7 @@ std::ostream& operator<<(ostream& out, const OrdPartition& p)
     {
         stringstream ss;
 
-        auto v = get_root(p.g).value();
+        auto v = GA::get_root(p.g).value();
         auto nof_nodes = p.g.get_vertices().size();
         for (uint i = 0; i < nof_nodes - 1; ++i, v = *p.g.get_children(v).begin())
             ss << convert_ec_to_str(p.v_to_ec.at(v)) << " > ";
@@ -109,7 +95,7 @@ size_t OrdPartition::calc_hash_()
             rec_visit(c, depth+1, result);
     };
 
-    auto root = get_root(g);
+    auto root = GA::get_root(g);
     if (!root.has_value())  // such graphs correspond to invalid partitions (with cycles)
         return 0;
 
@@ -119,7 +105,7 @@ size_t OrdPartition::calc_hash_()
 }
 
 
-bool TotalOrdPartitionHelper::equal(const OrdPartition& p1, const OrdPartition& p2)
+bool TotalOrdPartitionHasher::equal(const OrdPartition& p1, const OrdPartition& p2)
 {
     // NOTE: assumes that both graphs are lines; but the check is omitted as it is expensive.
 
@@ -129,8 +115,8 @@ bool TotalOrdPartitionHelper::equal(const OrdPartition& p1, const OrdPartition& 
     if (p1.hash_ != p2.hash_)
         return false;
 
-    auto v1 = get_root(p1.g).value();
-    auto v2 = get_root(p2.g).value();
+    auto v1 = GA::get_root(p1.g).value();
+    auto v2 = GA::get_root(p2.g).value();
 
     while (true)
     {
