@@ -47,22 +47,14 @@ public:
 
     // NB: quite an expensive call
     friend std::ostream& operator<<(std::ostream& out, const OrdPartition& p);
-    friend struct TotalOrdPartitionHasher;  // TODO: remove me
-    friend class LinOrderDomain;
+    friend struct TotalOrdPartitionHasher;
+    friend class OrderDomain;
 
 private:
     const size_t hash_;
-    size_t calc_hash_();  // NB: returns 0 for partitions with cycles (which are invalid)
+    size_t calc_hash_() const;  // NB: returns 0 for partitions with cycles (which are invalid)
 };
 
-
-//struct TotalOrdPartitionHelper
-//{
-//    size_t operator()(const OrdPartition& p) const {return p.hash_;}
-//
-//     assumes the graph is a line: node1 -> node2 -> ...
-//    static bool equal(const OrdPartition& p1, const OrdPartition& p2);
-//};
 
 struct TotalOrdPartitionHasher
 {
@@ -70,6 +62,9 @@ struct TotalOrdPartitionHasher
     // assumes the graph is a line: node1 -> node2 -> ...
     static bool equal(const OrdPartition& p1, const OrdPartition& p2);
 };
+
+
+std::ostream& operator<<(std::ostream& out, const OrdPartition& p);  // to avoid warnings when defining sdf::operator<<(...)
 
 }
 

@@ -1,5 +1,6 @@
 #include "data_domain_interface.hpp"
 #include "ord_partition.hpp"
+#include "eq_partition.hpp"
 
 
 namespace sdf
@@ -7,7 +8,7 @@ namespace sdf
 
 
 
-class LinOrderDomain: public DataDomainInterface<OrdPartition>
+class OrderDomain: public DataDomainInterface<OrdPartition>
 {
 public:
     using P = OrdPartition;
@@ -17,7 +18,7 @@ public:
                          const std::unordered_set<std::string>& atmR) override;
 
     /* Returns the partial partition constructed from p and atm_tst_atoms (if possible).
-     * Assumes atm_tst_atoms are of the form "<" or "=", or the test is True, but not "≤" nor "≠".  */
+     * Assumes atm_tst_atoms are of the form "<" or "=", or the test is True, but not "≤" nor "≠". */
     std::optional<P>
     compute_partial_p_io(const P& p,
                          const std::unordered_set<spot::formula>& atm_tst_atoms) override;
@@ -36,7 +37,7 @@ public:
            const std::unordered_set<std::string>& sysR) override;
 
     bool
-    out_is_implementable(const OrdPartition& partition) override;
+    out_is_implementable(const P& partition) override;
 
     // ----------------------------------------------------------------------------------------- //
 
@@ -59,11 +60,11 @@ public:
     // ----------------------------------------------------------------------------------------- //
 
     size_t
-    hash(const OrdPartition&) override;
+    hash(const P&) override;
 
     // assumes the partitions are total
     bool
-    total_equal(const OrdPartition& total_p1, const OrdPartition& total_p2) override;
+    total_equal(const P& total_p1, const P& total_p2) override;
 };
 
 

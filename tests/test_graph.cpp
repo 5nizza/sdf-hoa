@@ -5,8 +5,8 @@
 
 #include "gtest/gtest.h"
 
-#include "graph.hpp"
-#include "graph_algo.hpp"
+#include "reg/graph.hpp"
+#include "reg/graph_algo.hpp"
 #include "utils.hpp"
 
 using namespace sdf;
@@ -16,14 +16,14 @@ using namespace graph;
 using V = Graph::V;
 using GA = GraphAlgo;
 
-#define hset unordered_set
+#define Vset unordered_set<V>
 #define hmap unordered_map
 
 TEST(GraphTest, AddEdge)
 {
     auto g = Graph();
     g.add_edge(1, 2);
-    ASSERT_EQ(g.get_vertices(), hset({1u,2u}));
+    ASSERT_EQ(g.get_vertices(), Vset({1,2}));
 }
 
 TEST(GraphTest, RemoveVertex)
@@ -34,8 +34,30 @@ TEST(GraphTest, RemoveVertex)
     g.add_edge(2, 2);
     g.add_edge(1, 3);
     g.remove_vertex(2);
-    ASSERT_EQ(g.get_vertices(), hset({1u,3u}));
-    ASSERT_EQ(g.get_children(1), hset({3u}));
+    ASSERT_EQ(g.get_vertices(), Vset({1,3}));
+    ASSERT_EQ(g.get_children(1), Vset({3}));
+}
+
+TEST(GraphTest, MergeVertices0)
+{
+    auto g = Graph({1,2});  // two independent vertices
+    GraphAlgo::merge_v1_into_v2(g, 1, 2);
+    ASSERT_EQ(g.get_vertices(), Vset({2}));
+    ASSERT_TRUE(g.get_children(2).empty());
+    ASSERT_TRUE(g.get_parents(2).empty());
+}
+
+TEST(GraphTest, MergeVerticesMainCase)
+{
+    // 1->2->3, 4->1
+    // after merging(2,4) becomes
+    // 1 <-> 4 -> 3
+    auto g = Graph({{1,2}, {2,3}, {4,1}});
+    GraphAlgo::merge_v1_into_v2(g, 2, 4);
+    ASSERT_EQ(g.get_vertices(), Vset({1,4,3}));
+    ASSERT_EQ(g.get_children(1), Vset({4}));
+    ASSERT_EQ(g.get_children(4), Vset({1,3}));
+    ASSERT_TRUE(g.get_children(3).empty());
 }
 
 TEST(GraphTest, MergeVerticesSelfLoop1)
@@ -44,36 +66,32 @@ TEST(GraphTest, MergeVerticesSelfLoop1)
     g.add_edge(1, 1);
     g.add_vertex(2);
     GraphAlgo::merge_v1_into_v2(g, 1, 2);
-    ASSERT_EQ(g.get_vertices(), hset({2u}));
-    ASSERT_EQ(g.get_parents(2), hset({2u}));
-    ASSERT_EQ(g.get_children(2), hset({2u}));
+    ASSERT_EQ(g.get_vertices(), Vset({2}));
+    ASSERT_EQ(g.get_parents(2), Vset({2}));
+    ASSERT_EQ(g.get_children(2), Vset({2}));
 }
 
 TEST(GraphTest, MergeVerticesSelfLoop2)
 {
-    Graph g1, g2;
-    g1.add_edge(1, 2);
-    g2.add_edge(2, 1);
+    Graph g1({{1,2}}), g2({{2,1}});
     for (auto g : {g1, g2})
     {
         GraphAlgo::merge_v1_into_v2(g, 1, 2);
-        ASSERT_EQ(g.get_vertices(), hset({2u}));
-        ASSERT_EQ(g.get_parents(2), hset({2u}));
-        ASSERT_EQ(g.get_children(2), hset({2u}));
+        ASSERT_EQ(g.get_vertices(), Vset({2}));
+        ASSERT_EQ(g.get_parents(2), Vset({2}));
+        ASSERT_EQ(g.get_children(2), Vset({2}));
     }
 }
 
 TEST(GraphTest, MergeVerticesSelfLoop3)
 {
-    auto g = Graph();
-    g.add_edge(1, 2);
-    g.add_edge(2, 3);
+    auto g = Graph({{1,2}, {2,3}});
     GraphAlgo::merge_v1_into_v2(g,1,3);
-    ASSERT_EQ(g.get_vertices(), hset({2u,3u}));
-    ASSERT_EQ(g.get_parents(3), hset({2u}));
-    ASSERT_EQ(g.get_children(3), hset({2u}));
-    ASSERT_EQ(g.get_parents(2), hset({3u}));
-    ASSERT_EQ(g.get_children(2), hset({3u}));
+    ASSERT_EQ(g.get_vertices(), Vset({2,3}));
+    ASSERT_EQ(g.get_parents(3), Vset({2}));
+    ASSERT_EQ(g.get_children(3), Vset({2}));
+    ASSERT_EQ(g.get_parents(2), Vset({3}));
+    ASSERT_EQ(g.get_children(2), Vset({3}));
 }
 
 TEST(GraphTest, GetDescendantsAncestors)
@@ -87,15 +105,15 @@ TEST(GraphTest, GetDescendantsAncestors)
     g.add_edge(3,4);
     g.add_vertex(5);
 
-    hset<V> result;
+    Vset result;
     auto insert = [&result](const V& v){result.insert(v);};
 
     GraphAlgo::get_descendants(g,1,insert);
-    ASSERT_EQ(result, hset({1u,2u,3u,4u}));
+    ASSERT_EQ(result, Vset({1,2,3,4}));
 
     result.clear();
     GraphAlgo::get_descendants(g,2,insert);
-    ASSERT_EQ(result, hset({3u,4u}));
+    ASSERT_EQ(result, Vset({3,4}));
 
     result.clear();
     GraphAlgo::get_descendants(g,4, insert);
@@ -155,7 +173,7 @@ TEST(GraphTest, AllTopoSorts)
 
 TEST(GraphTest, AllTopoSorts2)
 {
-    using T = vector<pair<Graph, hmap<V, hset<V>>>>;
+    using T = vector<pair<Graph, hmap<V, Vset>>>;
     assert_equal_content(GA::all_topo_sorts2(Graph({1,2})),
               T{
                 {Graph({{1,2}}), {{1,{1}},{2,{2}}}},

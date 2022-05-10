@@ -1,4 +1,4 @@
-#include "lin_order_domain.hpp"
+#include "order_domain.hpp"
 #include "atm_parsing_naming.hpp"
 
 #include "graph.hpp"
@@ -21,10 +21,10 @@ using namespace spot;
 using GA = graph::GraphAlgo;
 
 
-// convert "≥" into "= or >", convert "≠" into "< or >"
+// convert "≥" into two edges "= or >", convert "≠" into two edges "< or >"
 // note: the test "True" is handled later
 twa_graph_ptr
-LinOrderDomain::preprocess(const twa_graph_ptr& reg_ucw)
+OrderDomain::preprocess(const twa_graph_ptr& reg_ucw)
 {
     twa_graph_ptr g = spot::make_twa_graph(reg_ucw->get_dict());
     g->copy_ap_of(reg_ucw);
@@ -101,8 +101,8 @@ LinOrderDomain::preprocess(const twa_graph_ptr& reg_ucw)
 }
 
 OrdPartition
-LinOrderDomain::build_init_partition(const hset<string>& sysR,
-                                     const hset<string>& atmR)
+OrderDomain::build_init_partition(const hset<string>& sysR,
+                                  const hset<string>& atmR)
 {
     Graph g;
     g.add_vertex(0);
@@ -113,45 +113,13 @@ LinOrderDomain::build_init_partition(const hset<string>& sysR,
 }
 
 
-V add_vertex(Graph& g, hmap<V, EC>& v_to_ec, const string& var_name)
-{
-    for (const auto& v_ec : v_to_ec)
-        MASSERT(!v_ec.second.count(var_name), "the vertex is already present: " << var_name);
-
-    auto vertices = g.get_vertices();
-    auto new_v = vertices.empty()? 0 : 1 + *max_element(vertices.begin(), vertices.end());
-    g.add_vertex(new_v);
-    v_to_ec.insert({new_v, {var_name}});
-    return new_v;
-}
-
-
-V get_vertex_of(const string& var,
-                const Graph& g,
-                const hmap<V,EC>& v_to_ec)
-{
-    for (const auto& v : g.get_vertices())
-        if (v_to_ec.at(v).count(var))
-            return v;
-
-    MASSERT(0,
-            "not possible: var: " << var << ", v_to_ec: " <<
-                                  join(", ", v_to_ec,
-                                       [](const auto& v_ec)
-                                       {
-                                           return to_string(v_ec.first) + " -> {" + join(",", v_ec.second) + "}";
-                                       }));
-}
-
-/* Returns the partial partition constructed from p and atm_tst_atoms (if possible).
- * Assumes atm_tst_atoms are of the form "<" or "=", or the test is True, but not "≤" nor "≠".  */
 optional<OrdPartition>
-LinOrderDomain::compute_partial_p_io(const OrdPartition& p,
-                                     const hset<formula>& atm_tst_atoms)
+OrderDomain::compute_partial_p_io(const OrdPartition& p,
+                                  const hset<formula>& atm_tst_atoms)
 {
     // copy
     Graph g = p.g;
-    hmap<V, EC> v_to_ec = p.v_to_ec;
+    VtoEC v_to_ec = p.v_to_ec;
 
     add_vertex(g, v_to_ec, IN);
     add_vertex(g, v_to_ec, OUT);
@@ -163,7 +131,7 @@ LinOrderDomain::compute_partial_p_io(const OrdPartition& p,
         MASSERT(! (is_reg_name(t1) && is_reg_name(t2)), "not supported");
 
         auto v1 = get_vertex_of(t1, g, v_to_ec),
-                v2 = get_vertex_of(t2, g, v_to_ec);
+             v2 = get_vertex_of(t2, g, v_to_ec);
 
         if (cmp == "=")
         {
@@ -191,7 +159,7 @@ LinOrderDomain::compute_partial_p_io(const OrdPartition& p,
 
 
 vector<OrdPartition>
-LinOrderDomain::compute_all_p_io(const OrdPartition& partial_p_io)
+OrderDomain::compute_all_p_io(const OrdPartition& partial_p_io)
 {
     vector<OrdPartition> result;
     for (auto&& [new_g,mapper] : GA::all_topo_sorts2(partial_p_io.g))
@@ -230,7 +198,7 @@ LinOrderDomain::compute_all_p_io(const OrdPartition& partial_p_io)
 
 
 OrdPartition
-LinOrderDomain::update(const OrdPartition& p, const Asgn& asgn)
+OrderDomain::update(const OrdPartition& p, const Asgn& asgn)
 {
     auto new_g = p.g;  // copy
     auto new_v_to_ec = p.v_to_ec;
@@ -260,7 +228,7 @@ LinOrderDomain::update(const OrdPartition& p, const Asgn& asgn)
 
 
 OrdPartition
-LinOrderDomain::remove_io_from_p(const OrdPartition& p)
+OrderDomain::remove_io_from_p(const OrdPartition& p)
 {
     auto new_v_to_ec = p.v_to_ec;
     auto new_g = p.g;
@@ -288,7 +256,7 @@ LinOrderDomain::remove_io_from_p(const OrdPartition& p)
       when they all reside in the same EC.
 */
 hset<string>
-LinOrderDomain::pick_R(const OrdPartition& p_io, const hset<string>& sysR)
+OrderDomain::pick_R(const OrdPartition& p_io, const hset<string>& sysR)
 {
     hset<string> result;
     for (const auto& [v,ec] : p_io.v_to_ec)
@@ -300,8 +268,8 @@ LinOrderDomain::pick_R(const OrdPartition& p_io, const hset<string>& sysR)
 
 // Extract the full system test from a given partition.
 formula
-LinOrderDomain::extract_sys_tst_from_p(const OrdPartition& p,
-                                       const hset<string>& sysR)
+OrderDomain::extract_sys_tst_from_p(const OrdPartition& p,
+                                    const hset<string>& sysR)
 {
     auto v_IN = get_vertex_of(IN, p.g, p.v_to_ec);
     auto ec_IN = p.v_to_ec.at(v_IN);
@@ -363,11 +331,11 @@ The encoding is:
   ensure that having ↑r1 & ↑r2 leads to a rejecting sink.
 */
 void
-LinOrderDomain::introduce_sysActionAPs(const hset<string>& sysR,
-                                       twa_graph_ptr classical_ucw, // NOLINT
+OrderDomain::introduce_sysActionAPs(const hset<string>& sysR,
+                                    twa_graph_ptr classical_ucw, // NOLINT
                                        set<formula>& sysTst,
-                                       set<formula>& sysAsgn,
-                                       set<formula>& sysOutR)
+                                    set<formula>& sysAsgn,
+                                    set<formula>& sysOutR)
 {
     // create variables for sysTst, sysAsgn, R
     for (const auto& r : sysR)
@@ -392,7 +360,7 @@ LinOrderDomain::introduce_sysActionAPs(const hset<string>& sysR,
 
 /* returns false iff o does not belong to a class of i or of some sys register */
 bool
-LinOrderDomain::out_is_implementable(const OrdPartition& partition)
+OrderDomain::out_is_implementable(const OrdPartition& partition)
 {
     for (auto&& [v,ec] : partition.v_to_ec)
         for (const auto& e : ec)
@@ -404,14 +372,14 @@ LinOrderDomain::out_is_implementable(const OrdPartition& partition)
 
 
 size_t
-LinOrderDomain::hash(const OrdPartition& p)
+OrderDomain::hash(const OrdPartition& p)
 {
     return p.hash_;
 }
 
 
 bool
-LinOrderDomain::total_equal(const OrdPartition& p1, const OrdPartition& p2)
+OrderDomain::total_equal(const OrdPartition& p1, const OrdPartition& p2)
 {
     // NOTE: assumes that both graphs are lines; but the check is omitted as it is expensive.
 

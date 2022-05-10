@@ -26,7 +26,15 @@ struct GraphAlgo
     // Note: uses BFS, hence elements are inserted in the order of the distance from `vertex`.
     static void get_ancestors(const Graph& g, const V& vertex, const std::function<void(const V&)>& insert);
 
-    /** Note: vertex v1 is removed. */
+    /** Note: vertex v1 is removed.
+     *  Examples:
+     *  self-loops:
+     *  {1->2} or {1<-2} become {2->2}
+     *  {1->1, 2} becomes {2->2}
+     *  main case:
+     *  1->2->3, 4->1
+     *  after merging(2,4) becomes 1 <-> 4 -> 3
+     * */
     static void merge_v1_into_v2(Graph& g, const V& v1, const V& v2);
 
     static bool has_cycles(const Graph& g);

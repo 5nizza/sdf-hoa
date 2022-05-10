@@ -361,12 +361,6 @@ formula create_MUTEXCL_violation(const set<formula>& props_)
     return formula::Or(big_OR);
 }
 
-void sdf::tmp()
-{
-    cout << "nothing to report" << endl;
-}
-
-
 
 // Explicit instantiation of the known cases.
 // We must explicitly instantiate the template function
@@ -388,15 +382,14 @@ sdf::reduce<OrdPartition>(
 
 
 
+#include "reg/eq_partition.hpp"
 
+void sdf::tmp()
+{
 
+//    cout << p1.equal_to(p2) << endl;
 
-
-
-
-
-
-
+}
 
 
 

@@ -36,6 +36,6 @@ reduce(DataDomainInterface<Partition>& domain,
        uint nof_sys_regs);
 
 
-void tmp();
+void tmp();  // for testing purposes: remove on release
 
 }  //namespace sdf

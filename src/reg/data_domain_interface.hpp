@@ -5,6 +5,7 @@
 #include <unordered_set>
 
 #include "asgn.hpp"
+#include "reg/types.hpp"
 
 #define BDD spotBDD
     #include "spot/tl/formula.hh"
@@ -17,14 +18,16 @@ namespace sdf
 
 
 /** Interface required by function reduce */
-template<typename P>
+template<typename Partition>
 class DataDomainInterface
 {
 public:
+    using P = Partition;
+
     virtual
     P
-    build_init_partition(const std::unordered_set<std::string>& sysR,
-                         const std::unordered_set<std::string>& atmR) = 0;
+    build_init_partition(const string_hset& sysR,
+                         const string_hset& atmR) = 0;
 
     virtual
     std::optional<P>
@@ -44,9 +47,9 @@ public:
     remove_io_from_p(const P& p) = 0;
 
     virtual
-    std::unordered_set<std::string>
+    string_hset
     pick_R(const P& p_io,
-           const std::unordered_set<std::string>& sysR) = 0;
+           const string_hset& sysR) = 0;
 
     virtual
     bool
@@ -56,7 +59,7 @@ public:
 
     virtual
     void
-    introduce_sysActionAPs(const std::unordered_set<std::string>& sysR,
+    introduce_sysActionAPs(const string_hset& sysR,
                            spot::twa_graph_ptr classical_ucw,  // NOLINT
                            std::set<spot::formula>& sysTst,
                            std::set<spot::formula>& sysAsgn,
@@ -65,7 +68,7 @@ public:
     virtual
     spot::formula
     extract_sys_tst_from_p(const P& p,
-                           const std::unordered_set<std::string>& sysR) = 0;
+                           const string_hset& sysR) = 0;
 
     // ----------------------------------------------------------------------------------------- //
 

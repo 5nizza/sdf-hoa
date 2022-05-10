@@ -16,9 +16,6 @@ using GA = graph::GraphAlgo;
 #define hmap unordered_map
 
 
-namespace sdf
-{
-
 /** Check that g has shape v1->v2->...->vEnd.
     NB: syntactic check, i.e., it returns false if the graph succession is a line
     yet syntactically it looks different.
@@ -37,8 +34,7 @@ bool is_line(const Graph& g)
     return true;
 }
 
-
-std::ostream& operator<<(ostream& out, const OrdPartition& p)
+ostream& sdf::operator<<(ostream& out, const OrdPartition& p)
 {
     auto convert_ec_to_str = [](const EC& ec)
     {
@@ -81,7 +77,7 @@ std::ostream& operator<<(ostream& out, const OrdPartition& p)
     return out;
 }
 
-size_t OrdPartition::calc_hash_()
+size_t OrdPartition::calc_hash_() const
 {
     // traverse the graph and computes the hash value as:
     // SUM over: hash(depth+1) * XOR([hash(e) for e in ec(v)])
@@ -129,9 +125,6 @@ bool TotalOrdPartitionHasher::equal(const OrdPartition& p1, const OrdPartition& 
     }
 
     MASSERT(0, "unreachable");
-}
-
-
 }
 
 

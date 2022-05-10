@@ -8,7 +8,7 @@
 #include "reg/reg_reduction.hpp"
 #include "ehoa_parser.hpp"
 #include "timer.hpp"
-#include "reg/lin_order_domain.hpp"
+#include "reg/order_domain.hpp"
 
 #define BDD spotBDD
     #include <spot/twaalgos/dot.hh>
@@ -125,19 +125,21 @@ int main(int argc, const char *argv[])
     auto [reg_ucw, inputs, outputs, is_moore] = read_ehoa(hoa_file_name);
     INF("input automaton: nof_states = " << reg_ucw->num_states() << ", nof_edges = " << reg_ucw->num_edges());
 
-    /* -------------------------------------------------------------------------- */
-    auto domain = LinOrderDomain();
+    // construct the domain
+    auto domain = OrderDomain();
     reg_ucw = domain.preprocess(reg_ucw);  // specific to LinOrderDomain
-    auto [classical_ucw, sysTst, sysAsgn, sysOutR] =
-            sdf::reduce(domain, reg_ucw, b);
-    DEBUG("completed: unprocessed: nof_states = " << classical_ucw->num_states() << ", nof_edges = " << classical_ucw->num_edges());
-    /* -------------------------------------------------------------------------- */
 
+    // main: reduce
+    auto [classical_ucw, sysTst, sysAsgn, sysOutR] =
+            reduce(domain, reg_ucw, b);
+    DEBUG("completed\nunprocessed: nof_states = " << classical_ucw->num_states() << ", nof_edges = " << classical_ucw->num_edges());
+
+    // simplify
     classical_ucw->merge_edges();
     classical_ucw->merge_states();
     DEBUG("merged states and edges: nof_states = " << classical_ucw->num_states() << ", nof_edges = " << classical_ucw->num_edges());
 
-    // we still need postprocessing to ensure BA and SBAcc
+    // postprocess: ensure BA and SBAcc, and minimize
     spot::postprocessor post;
     post.set_type(spot::postprocessor::BA);
     post.set_pref(spot::postprocessor::SBAcc);
@@ -150,6 +152,7 @@ int main(int argc, const char *argv[])
         result_atm->copy_state_names_from(classical_ucw);
     INF("result: nof_states = " << result_atm->num_states() << ", nof_edges = " << result_atm->num_edges());
 
+    // output
     INF("outputting to " << output_file_name);
     if (output_file_name == STDOUT)
         spot::print_dot(cout, result_atm);

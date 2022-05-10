@@ -214,6 +214,17 @@ a_minus_b(const std::set<E>& a, const Container& b)
     return result;
 }
 
+template<typename E>
+std::vector<E>
+a_minus_b(const std::vector<E>& a, const std::unordered_set<E>& b)
+{
+    std::vector<E> result;
+    for (const auto& e : a)
+        if (b.count(e) == 0)
+            result.push_back(e);
+    return result;
+}
+
 template<typename Container>
 Container
 a_intersection_b(const Container& a, const Container& b)
@@ -303,12 +314,14 @@ size_t hash_ordered(const OrderedContainer& container, ElementHasher hasher)
 template<typename Container, typename ElementHasher>
 size_t xor_hash(const Container& container, ElementHasher hasher)
 {
-    if (container.empty())
-        return 0;
-
     auto hash_value = std::hash<size_t>()(container.size());
+
+    if (container.empty())
+        return hash_value;
+
     for (const auto& e : container)
         hash_value ^= hasher(e);
+
     return hash_value;
 }
 
@@ -358,6 +371,15 @@ template<typename T>
 std::vector<T> to_vector(const std::unordered_set<T>& c)
 {
     return std::vector<T>(c.begin(), c.end());
+}
+
+template<typename Container>
+std::vector<typename Container::key_type> keys(const Container& container)
+{
+    std::vector<typename Container::key_type> result;
+    for (const auto& [k,v] : container)
+        result.push_back(k);
+    return result;
 }
 
 
