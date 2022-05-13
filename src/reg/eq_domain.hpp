@@ -7,8 +7,6 @@
 namespace sdf
 {
 
-
-
 class EqDomain: public DataDomainInterface<EqPartition>
 {
 public:

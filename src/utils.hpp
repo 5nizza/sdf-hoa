@@ -209,8 +209,17 @@ a_minus_b(const std::set<E>& a, const Container& b)
 {
     std::set<E> result = a;
     for (const auto& e : b)
-        if (result.count(e))
-            result.erase(e);
+        result.erase(e);
+    return result;
+}
+
+template<typename E, typename Container>
+std::unordered_set<E>
+a_minus_b(const std::unordered_set<E>& a, const Container& b)
+{
+    std::unordered_set<E> result = a;
+    for (const auto& e : b)
+        result.erase(e);
     return result;
 }
 
@@ -382,8 +391,17 @@ std::vector<typename Container::key_type> keys(const Container& container)
     return result;
 }
 
+template<typename Container>
+std::unordered_set<typename Container::key_type> keysSet(const Container& container)
+{
+    std::unordered_set<typename Container::key_type> result;
+    for (const auto& [k,v] : container)
+        result.insert(k);
+    return result;
+}
 
 
 
 
-} // namespace sdf
+
+}  // namespace sdf

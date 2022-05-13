@@ -4,6 +4,7 @@
  */
 #pragma once
 
+#include <vector>
 #include <unordered_map>
 #include <unordered_set>
 #include <iostream>  // for cerr in assertions
@@ -17,6 +18,7 @@ class Graph
 public:
     typedef uint V;
     Graph() = default;
+
     Graph(const std::initializer_list<std::pair<V,V>>& edges)
     {
         for (const auto& [src, dst] : edges)
@@ -24,6 +26,13 @@ public:
     }
 
     Graph(const std::initializer_list<V>& vertices)
+    {
+        for (const auto& v : vertices)
+            add_vertex(v);
+    }
+
+    explicit
+    Graph(const std::unordered_set<V>& vertices)
     {
         for (const auto& v : vertices)
             add_vertex(v);

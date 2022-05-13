@@ -21,7 +21,7 @@ P EqDomain::build_init_partition(const string_hset& sysR, const string_hset& atm
 optional<P> EqDomain::compute_partial_p_io(const P& p,
                                            const hset<spot::formula>& atm_tst_atoms)
 {
-    // Copy
+    // copy
     auto v_to_ec = p.v_to_ec;
     auto g = p.g;
     auto mut_excl = p.mutexl_vertices;
@@ -31,7 +31,7 @@ optional<P> EqDomain::compute_partial_p_io(const P& p,
 
     for (const auto& tst : atm_tst_atoms)
     {
-        auto [t1, t2, op] = parse_tst(tst.ap_name());
+        auto[t1, t2, op] = parse_tst(tst.ap_name());
         MASSERT(!(is_reg_name(t1) && is_reg_name(t2)), "not supported");
         MASSERT(op == "=" || op == "≠", "");
 
@@ -50,7 +50,7 @@ optional<P> EqDomain::compute_partial_p_io(const P& p,
                 return {};
 
             // merge
-            auto [v_src, v_dst] = mut_excl.count(v1) ? pair(v2,v1) : pair(v1,v2);  // to avoid modifying mutexcl_vertices
+            auto[v_src, v_dst] = mut_excl.count(v1) ? pair(v2,v1) : pair(v1,v2);  // pick v_src v_dst in the order that avoids unnecessary modification of mutexcl_vertices
             GraphAlgo::merge_v1_into_v2(g, v_src, v_dst);
             auto ec_vSrc = v_to_ec.at(v_src);
             v_to_ec.at(v_dst).insert(ec_vSrc.begin(), ec_vSrc.end());
@@ -73,74 +73,80 @@ optional<P> EqDomain::compute_partial_p_io(const P& p,
     return EqPartition(g, v_to_ec, mut_excl);
 }
 
+hset<V> get_neighbours(const Graph& g, const V& v)
+{
+    return a_union_b(g.get_children(v),
+                     g.get_parents(v));
+}
+
+// returns: new graph and new v_to_ec
+pair<Graph, VtoEC> merge_c1_into_c2(const Graph& g, const VtoEC& v_to_ec, const V& src, const V& dst)
+{
+    auto new_v_to_ec = v_to_ec;
+    auto new_g = g;
+    GraphAlgo::merge_v1_into_v2(new_g, src, dst);
+    new_v_to_ec.at(dst).insert(new_v_to_ec.at(src).begin(),
+                               new_v_to_ec.at(src).end());
+    new_v_to_ec.erase(src);
+
+    return {new_g, new_v_to_ec};
+}
+
 vector<P> EqDomain::compute_all_p_io(const P& partial_p_io)
 {
-    // This algorithm works for any number of input/output variables.
-    // NOTE:
-    // the original version could produce certain partitions twice,
-    // so I had to resort to using hash sets, kinda lame.
-    // Here is an example where the original version could produce a partition {i,o,r} twice,
-    // because there are two ways to get it:
-    // 1. put i in into {r}, giving {i,r}, then put o into {i,r}: {i,o,r}
-    // 2. put i into {o}, giving {i,o}, then put {i,o} into {r}: {i,o,r}
+    /*
+    We assume there are at most two vertices outside mut_excl.
 
-    // TODO: not finished
+  - If there are no vertices outside mut_excl,
+    then everything is already fixed, and partial_p_io is complete.
+
+  - If there is one or two nonfixed vertices, we consider the cases:
+    v = take any from nonfixed
+    first: put v into its own class (by adding v to mutexcl), and recursive call the procedure with this new partition
+    second: enumerate c in mutexcl - v.neighbours:
+        merge v into class c
+        recursively call the procedure with this new partition
+
+    This algorithm works for non_fixed having the size at most 2,
+    but wasn't checked for |non_fixed| > 2, but looks like it should work there as well.
+    */
 
     vector<EqPartition> result;
-    function<void(const EqPartition&)>
-    rec_call =
-    [&rec_call,&result](const EqPartition& cur_partition)
+
+    std::function<void(const EqPartition&)>
+    rec = [&result,&rec](const EqPartition& p)
     {
-        auto all_v = keys(cur_partition.v_to_ec);
-        auto non_fixed = a_minus_b(all_v, cur_partition.mutexl_vertices);
-        if (non_fixed.empty())
+        // check the assumption
+        auto all_v = keys(p.v_to_ec);
+        auto non_fixed = a_minus_b(all_v, p.mutexl_vertices);
+        MASSERT(non_fixed.size() <= 2, "the algorithm assumption is violated");
+
+        if (non_fixed.empty())    // case 0: nothing to vary, p is complete
         {
-            result.push_back(cur_partition);  // (internally, it copies cur_partition)
+            auto new_g = Graph(p.g.get_vertices());  // we create a new graph with no edges (whereas p.g might have edges since rec() doesn't clean them)
+            result.emplace_back(new_g, p.v_to_ec, p.mutexl_vertices);
             return;
         }
 
-        auto v = non_fixed.front();  // pick arbitrary one
+        // Cases 1 and 2
+        auto v = non_fixed.front();
 
-        auto v_neq = a_union_b(cur_partition.g.get_children(v),
-                               cur_partition.g.get_parents(v));
-        auto merge_candidates = a_minus_b(all_v, v_neq);
-        MASSERT(!merge_candidates.empty(), "not possible as it at least contains itself");
-        // Candidates to merge v with.
-        // Candidates contains v itself: it means "a class separate from all others".
-        for (const auto& c : merge_candidates)
+        // first, put v into its own equivalence class
+        rec(EqPartition(p.g,  // this graph may have edges like "v -> some m from mut_excl" which are not needed anymore, but that is OK
+                        p.v_to_ec,
+                        a_union_b(p.mutexl_vertices, {v})));
+
+        // second, merge with all possible classes
+        auto merge_candidates = a_minus_b(p.mutexl_vertices, get_neighbours(p.g, v));
+        for (const auto& mc: merge_candidates)
         {
-            if (v != c)
-            {
-                auto new_v_to_ec = cur_partition.v_to_ec;
-                auto new_g = cur_partition.g;
-                GraphAlgo::merge_v1_into_v2(new_g, v, c);
-                new_v_to_ec.at(c).insert(new_v_to_ec.at(v).begin(), new_v_to_ec.at(v).end());
-                new_v_to_ec.erase(v);
-                rec_call(EqPartition(new_g, new_v_to_ec, cur_partition.mutexl_vertices));
-            }
-            else  // v itself: put it into a separate equivalence class
-            {
-                auto new_mut_excl = cur_partition.mutexl_vertices;
-                new_mut_excl.insert(v);
-
-                auto new_g = cur_partition.g;
-                // add edges from v to V \ mutexcl (thus also minus v)
-                for (const auto& v_other : a_minus_b(all_v, new_mut_excl))
-                    new_g.add_edge(v, v_other);
-                // remove unnecessary edges between v and mutexcl vertices
-                for (const auto& m : new_mut_excl)
-                {
-                    if (new_g.get_children(v).count(m))  // v->m
-                        new_g.remove_edge(v,m);
-                    if (new_g.get_children(m).count(v))  // m->v
-                        new_g.remove_edge(m,v);
-                }
-
-                rec_call(EqPartition(new_g, cur_partition.v_to_ec, new_mut_excl));
-            }
+            auto[new_g, new_v_to_ec] = merge_c1_into_c2(p.g, p.v_to_ec, v, mc);
+            // NB: new_g may have unnecessary edges, since we merge v with mutexcl, but that is handled in the recursion leaf
+            rec(EqPartition(new_g, new_v_to_ec, p.mutexl_vertices));
         }
     };
-    rec_call(partial_p_io);
+
+    rec(partial_p_io);
     return result;
 }
 
