@@ -25,16 +25,6 @@ using twa_graph_ptr = spot::twa_graph_ptr;
 #define hset unordered_set
 
 
-void introduce_labelAPs(const twa_graph_ptr old_ucw,  // NOLINT
-                        twa_graph_ptr new_ucw         // NOLINT
-                        )
-{
-    for (const auto& ap : old_ucw->ap())
-        if (!is_atm_tst(ap.ap_name()) && !is_atm_asgn(ap.ap_name()))
-            new_ucw->register_ap(ap);
-}
-
-
 // Assumes that f is in DNF.
 // NB: if f = True returns a single cube `True`
 vector<formula> get_cubes(const formula& f)
@@ -150,6 +140,21 @@ void add_edge_to_every_state(twa_graph_ptr& atm,
                              uint dst_state,
                              const formula& label);
 
+
+pair<set<formula>, set<formula>>
+construct_AsgnOut(const hset<string>& sysR)
+{
+    set<formula> sysAsgn, sysOutR;
+    for (const auto& r : sysR)
+    {
+        sysAsgn.insert(ctor_sys_asgn_r(r));
+        // vars to output r in R: unary encoding: introduce |R| many of vars, then require MUTEXCL
+        sysOutR.insert(ctor_sys_out_r(r));
+    }
+    return {sysAsgn, sysOutR};
+}
+
+
 template<typename P>
 tuple<twa_graph_ptr,  // new_ucw
       set<formula>,   // sysTst
@@ -157,28 +162,32 @@ tuple<twa_graph_ptr,  // new_ucw
       set<formula>>   // sysOutR
 sdf::reduce(DataDomainInterface<P>& domain, const twa_graph_ptr& reg_ucw, uint nof_sys_regs)
 {
-    // result
+    // create new_ucw
     twa_graph_ptr new_ucw;
-    set<formula> sysTst, sysAsgn, sysOutR;  // Boolean variables
-
     auto bdd_dict = spot::make_bdd_dict();
     new_ucw = spot::make_twa_graph(bdd_dict);
-
     new_ucw->copy_acceptance_of(reg_ucw);
     if (reg_ucw->prop_state_acc())
         new_ucw->prop_state_acc(true);
 
-    auto sysR = build_sysR(nof_sys_regs);
+    // register names
     auto atmR = build_atmR(reg_ucw);
+    auto sysR = build_sysR(nof_sys_regs);
     assert_no_intersection(sysR, atmR);
 
-    domain.introduce_sysActionAPs(sysR, new_ucw, sysTst, sysAsgn, sysOutR);
-    introduce_labelAPs(reg_ucw, new_ucw);
+    // create sysTst, sysAsgn, sysOutR
+    auto sysTst = domain.construct_sysTstAP(sysR);
+    auto [sysAsgn,sysOutR] = construct_AsgnOut(sysR);
+
+    // introduce APs
+    for (const auto& vars : {sysTst, sysAsgn, sysOutR})
+        for (const auto& v : vars)
+            new_ucw->register_ap(v);
+    for (const auto& ap : reg_ucw->ap())
+        if (!is_atm_tst(ap.ap_name()) && !is_atm_asgn(ap.ap_name()))
+            new_ucw->register_ap(ap);
 
     // -- the main part --
-    // The register-naming convention (hard-coded) is:
-    // - system registers are rs1, rs2, ..., rsK
-    // - automaton registers are whatever the spec automaton uses! (I do check that Rs \cap Ra = empty)
 
     // (technical detail) define hash function and equality for partitions
     using QP = pair<uint, P>;
@@ -289,7 +298,7 @@ sdf::reduce(DataDomainInterface<P>& domain, const twa_graph_ptr& reg_ucw, uint n
                         j++;
                         auto sys_asgn = compute_asgn(sys_asgn_atoms);
                         auto p_io_ = domain.update(p_io, sys_asgn);
-                        auto all_r = domain.pick_R(p_io_, sysR);
+                        auto all_r = domain.pick_R(p_io_);
                         // p_io is complete, hence we should continue only if `o` lies in one of ECs with system regs in it
                         if (all_r.empty())
                         {
@@ -303,7 +312,7 @@ sdf::reduce(DataDomainInterface<P>& domain, const twa_graph_ptr& reg_ucw, uint n
 
                         /* add to classical_ucw the edge (q,p) -> (q_succ, p_succ) labelled (sys_tst(p_io) & ap(cube), sys_asgn, out_r) */
                         auto cond = formula::And({asgn_to_formula(sys_asgn, sysAsgn),
-                                                  domain.extract_sys_tst_from_p(p_io, sysR),
+                                                  domain.extract_sys_tst_from_p(p_io),
                                                   R_to_formula(all_r),
                                                   formula::And(vector<formula>(APs.begin(), APs.end()))});
                         new_ucw->new_edge(c_of_qp, get_c(qp_succ),

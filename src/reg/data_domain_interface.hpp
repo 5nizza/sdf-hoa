@@ -46,10 +46,15 @@ public:
     P
     remove_io_from_p(const P& p) = 0;
 
+    /**
+     * From a given partition (which includes positions of IN and OUT),
+     * compute system registers compatible with OUT.
+     * @param p_io is assumed to be complete
+     * NB: there might still be several different possible r: when they all reside in the same EC.
+    */
     virtual
     string_hset
-    pick_R(const P& p_io,
-           const string_hset& sysR) = 0;
+    pick_R(const P& p_io) = 0;
 
     virtual
     bool
@@ -57,18 +62,17 @@ public:
 
     // ----------------------------------------------------------------------------------------- //
 
+    /**
+     * @param sysR system registers (NB: we assume throughout that they satisfy is_sys_reg_name)
+     * @return newly created system-test atomic propositions
+     */
     virtual
-    void
-    introduce_sysActionAPs(const string_hset& sysR,
-                           spot::twa_graph_ptr classical_ucw,  // NOLINT
-                           std::set<spot::formula>& sysTst,
-                           std::set<spot::formula>& sysAsgn,
-                           std::set<spot::formula>& sysOutR) = 0;
+    std::set<spot::formula>
+    construct_sysTstAP(const std::unordered_set<std::string>& sysR) = 0;
 
     virtual
     spot::formula
-    extract_sys_tst_from_p(const P& p,
-                           const string_hset& sysR) = 0;
+    extract_sys_tst_from_p(const P& p) = 0;
 
     // ----------------------------------------------------------------------------------------- //
 

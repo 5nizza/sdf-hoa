@@ -6,6 +6,7 @@
 
 using namespace sdf;
 using namespace std;
+using namespace spot;
 using namespace graph;
 
 #define hset unordered_set
@@ -150,33 +151,126 @@ vector<P> EqDomain::compute_all_p_io(const P& partial_p_io)
     return result;
 }
 
-P EqDomain::update(const P& p, const Asgn& asgn)
+EqPartition EqDomain::update(const EqPartition& p, const Asgn& asgn)
 {
+    auto g = p.g;
+    auto v_to_ec = p.v_to_ec;
+    auto mutexcl = p.mutexl_vertices;
+
+    for (const auto& [var,registers] : asgn.asgn)
+    {
+        auto v_dst = get_vertex_of(var, g, v_to_ec);
+        for (const auto& r : registers)
+        {
+            auto v_src = get_vertex_of(r, g, v_to_ec);
+            if (v_src == v_dst)
+                continue;
+            v_to_ec.at(v_dst).insert(r);
+            v_to_ec.at(v_src).erase(r);
+            if (v_to_ec.at(v_src).empty())
+            {
+                v_to_ec.erase(v_src);
+                g.remove_vertex(v_src);
+                mutexcl.erase(v_src);
+            }
+        }
+    }
+
+    return EqPartition(g, v_to_ec, mutexcl);
 }
 
-P EqDomain::remove_io_from_p(const P& p)
+EqPartition EqDomain::remove_io_from_p(const EqPartition& p)
 {
+    auto g = p.g;
+    auto mutexcl = p.mutexl_vertices;
+    auto v_to_ec = p.v_to_ec;
+
+    for (const auto& var : {IN, OUT})
+    {
+        auto v = get_vertex_of(var, g, v_to_ec);
+        v_to_ec.at(v).erase(var);
+        if (v_to_ec.at(v).empty())
+        {
+            v_to_ec.erase(v);
+            g.remove_vertex(v);
+            mutexcl.erase(v);
+        }
+    }
+
+    return EqPartition(g, v_to_ec, mutexcl);
 }
 
-string_hset EqDomain::pick_R(const P& p_io, const string_hset& sysR)
+bool EqDomain::out_is_implementable(const EqPartition& p)
 {
+    auto out_v = get_vertex_of(OUT, p.g, p.v_to_ec);
+    auto out_ec = p.v_to_ec.at(out_v);
+    for (const auto& v : out_ec)
+        if (is_sys_reg_name(v) || is_input_name(v))
+            return true;
+    return false;
 }
 
-bool EqDomain::out_is_implementable(const P& partition)
+string_hset EqDomain::pick_R(const EqPartition& p_io)
 {
+    hset<string> result;
+    auto out_v = get_vertex_of(OUT, p_io.g, p_io.v_to_ec);
+    auto out_ec = p_io.v_to_ec.at(out_v);
+    for (const auto& v : out_ec)
+        if (is_sys_reg_name(v))
+            result.insert(v);
+    return result;
 }
 
-void EqDomain::introduce_sysActionAPs(const string_hset& sysR, spot::twa_graph_ptr classical_ucw,
-                                      set<spot::formula>& sysTst, set<spot::formula>& sysAsgn,
-                                      set<spot::formula>& sysOutR)
+spot::formula EqDomain::extract_sys_tst_from_p(const EqPartition& p)
 {
+    MASSERT(p.mutexl_vertices.size() == p.v_to_ec.size(), "this function assumes the partition is complete");
 
+    auto result = formula::tt();
+    for (auto v : p.mutexl_vertices)
+    {
+        auto is_IN = p.v_to_ec.at(v).count(IN)>0;
+        for (const auto& r: p.v_to_ec.at(v))
+            if (is_sys_reg_name(r))
+                result = formula::And({result,
+                                       is_IN ?
+                                       ctor_sys_tst_inp_equal_r(r)
+                                       :
+                                       formula::Not(ctor_sys_tst_inp_equal_r(r))});
+    }
+
+    return result;
 }
 
-spot::formula EqDomain::extract_sys_tst_from_p(const P& p, const string_hset& sysR)
+set<spot::formula> EqDomain::construct_sysTstAP(const hset<string>& sysR)
 {
+    set<formula> sysTst;
+    for (const auto& r : sysR)
+        sysTst.insert(ctor_sys_tst_inp_equal_r(r));
+    return sysTst;
 }
 
 size_t EqDomain::hash(const P& p) { return p.hash_; }
 
 bool EqDomain::total_equal(const P& total_p1, const P& total_p2) { return total_p1.equal_to(total_p2); }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

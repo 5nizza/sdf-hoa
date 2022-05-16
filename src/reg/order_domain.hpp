@@ -33,24 +33,18 @@ public:
     remove_io_from_p(const P& p) override;
 
     std::unordered_set<std::string>
-    pick_R(const P& p_io,
-           const std::unordered_set<std::string>& sysR) override;
+    pick_R(const P& p_io) override;
 
     bool
     out_is_implementable(const P& partition) override;
 
     // ----------------------------------------------------------------------------------------- //
 
-    void
-    introduce_sysActionAPs(const std::unordered_set<std::string>& sysR,
-                           spot::twa_graph_ptr classical_ucw,  // NOLINT
-                           std::set<spot::formula>& sysTst,
-                           std::set<spot::formula>& sysAsgn,
-                           std::set<spot::formula>& sysOutR) override;
+    std::set<spot::formula>
+    construct_sysTstAP(const std::unordered_set<std::string>& sysR) override;
 
     spot::formula
-    extract_sys_tst_from_p(const P& p,
-                           const std::unordered_set<std::string>& sysR) override;
+    extract_sys_tst_from_p(const P& p) override;
 
     // convert "≥" into "= or >", convert "≠" into "< or >"
     // note: the test "True" is handled later

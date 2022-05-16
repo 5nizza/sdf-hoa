@@ -256,20 +256,21 @@ OrderDomain::remove_io_from_p(const OrdPartition& p)
       when they all reside in the same EC.
 */
 hset<string>
-OrderDomain::pick_R(const OrdPartition& p_io, const hset<string>& sysR)
+OrderDomain::pick_R(const OrdPartition& p_io)
 {
     hset<string> result;
-    for (const auto& [v,ec] : p_io.v_to_ec)
-        if (find_if(ec.begin(), ec.end(), is_output_name) != ec.end())  // assumes there is only one o
-            return a_intersection_b(ec, sysR);
-    return {};
+    auto out_v = get_vertex_of(OUT, p_io.g, p_io.v_to_ec);
+    auto out_ec = p_io.v_to_ec.at(out_v);
+    for (const auto& v : out_ec)
+        if (is_sys_reg_name(v))
+            result.insert(v);
+    return result;
 }
 
 
 // Extract the full system test from a given partition.
 formula
-OrderDomain::extract_sys_tst_from_p(const OrdPartition& p,
-                                    const hset<string>& sysR)
+OrderDomain::extract_sys_tst_from_p(const OrdPartition& p)
 {
     auto v_IN = get_vertex_of(IN, p.g, p.v_to_ec);
     auto ec_IN = p.v_to_ec.at(v_IN);
@@ -278,8 +279,9 @@ OrderDomain::extract_sys_tst_from_p(const OrdPartition& p,
 
     // components for *=r
     {
-        for (const auto& r: a_intersection_b(sysR, ec_IN))
-            result = formula::And({result, ctor_sys_tst_inp_equal_r(r)});
+        for (const auto& r: ec_IN)
+            if (is_sys_reg_name(r))
+                result = formula::And({result, ctor_sys_tst_inp_equal_r(r)});
     }
 
     // getting system registers below *
@@ -287,12 +289,13 @@ OrderDomain::extract_sys_tst_from_p(const OrdPartition& p,
         hset<V> descendants;
         GA::get_descendants(p.g, v_IN, [&descendants](const V& v) { descendants.insert(v); });
         for (const auto& v: descendants)
-            for (const auto& r: a_intersection_b(sysR, p.v_to_ec.at(v)))
+            for (const auto& r: p.v_to_ec.at(v))
                 // r<* is encoded as !(in=r) & !(in<r)
-                result = formula::And({result,
-                                       formula::Not(ctor_sys_tst_inp_equal_r(r)),
-                                       formula::Not(ctor_sys_tst_inp_smaller_r(r))
-                                      });
+                if (is_sys_reg_name(r))
+                    result = formula::And({result,
+                                           formula::Not(ctor_sys_tst_inp_equal_r(r)),
+                                           formula::Not(ctor_sys_tst_inp_smaller_r(r))
+                                          });
     }
 
     // getting system registers above *
@@ -300,12 +303,13 @@ OrderDomain::extract_sys_tst_from_p(const OrdPartition& p,
         hset<V> ancestors;
         GA::get_ancestors(p.g, v_IN, [&ancestors](const V& v) { ancestors.insert(v); });
         for (const auto& v: ancestors)
-            for (const auto& r: a_intersection_b(sysR, p.v_to_ec.at(v)))
+            for (const auto& r: p.v_to_ec.at(v))
                 // r>* is encoded as !(in=r) & (in<r)
-                result = formula::And({result,
-                                       formula::Not(ctor_sys_tst_inp_equal_r(r)),
-                                       ctor_sys_tst_inp_smaller_r(r)
-                                      });
+                if (is_sys_reg_name(r))
+                    result = formula::And({result,
+                                           formula::Not(ctor_sys_tst_inp_equal_r(r)),
+                                           ctor_sys_tst_inp_smaller_r(r)
+                                          });
     }
 
     return result;
@@ -330,44 +334,26 @@ The encoding is:
   for each register, introduce a Boolean variable ↑r, and
   ensure that having ↑r1 & ↑r2 leads to a rejecting sink.
 */
-void
-OrderDomain::introduce_sysActionAPs(const hset<string>& sysR,
-                                    twa_graph_ptr classical_ucw, // NOLINT
-                                       set<formula>& sysTst,
-                                    set<formula>& sysAsgn,
-                                    set<formula>& sysOutR)
+set<formula>
+OrderDomain::construct_sysTstAP(const hset<string>& sysR)
 {
-    // create variables for sysTst, sysAsgn, R
+    set<formula> sysTst;
     for (const auto& r : sysR)
     {
-        // sysTst variables for register r
-        classical_ucw->register_ap(ctor_sys_tst_inp_smaller_r(r));
-        classical_ucw->register_ap(ctor_sys_tst_inp_equal_r(r));
-
         sysTst.insert(ctor_sys_tst_inp_equal_r(r));
         sysTst.insert(ctor_sys_tst_inp_smaller_r(r));
-
-        // sysAsgn
-        classical_ucw->register_ap(ctor_sys_asgn_r(r));
-        sysAsgn.insert(ctor_sys_asgn_r(r));
-
-        // vars to output r in R: unary encoding: introduce |R| many of vars, then require MUTEXCL
-        classical_ucw->register_ap(ctor_sys_out_r(r));
-        sysOutR.insert(ctor_sys_out_r(r));
     }
+    return sysTst;
 }
 
 
 /* returns false iff o does not belong to a class of i or of some sys register */
 bool
-OrderDomain::out_is_implementable(const OrdPartition& partition)
+OrderDomain::out_is_implementable(const OrdPartition& p)
 {
-    for (auto&& [v,ec] : partition.v_to_ec)
-        for (const auto& e : ec)
-            if (is_output_name(e))
-                return any_of(ec.begin(), ec.end(), [](auto&& other) {return is_input_name(other) || is_sys_reg_name(other);});
-
-    throw logic_error("not possible");
+    auto out_v = get_vertex_of(OUT, p.g, p.v_to_ec);
+    auto ec = p.v_to_ec.at(out_v);
+    return any_of(ec.begin(), ec.end(), [](auto&& other) {return is_input_name(other) || is_sys_reg_name(other);});
 }
 
 
