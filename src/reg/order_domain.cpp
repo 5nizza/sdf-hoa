@@ -22,7 +22,6 @@ using GA = graph::GraphAlgo;
 
 
 // convert "≥" into two edges "= or >", convert "≠" into two edges "< or >"
-// note: the test "True" is handled later
 twa_graph_ptr
 OrderDomain::preprocess(const twa_graph_ptr& reg_ucw)
 {

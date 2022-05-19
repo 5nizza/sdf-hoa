@@ -13,7 +13,6 @@ using namespace graph;
 
 using P = EqPartition;
 
-
 P EqDomain::build_init_partition(const string_hset& sysR, const string_hset& atmR)
 {
     return EqPartition(Graph({1}), {{1, a_union_b(sysR, atmR)}}, {1});
@@ -252,25 +251,4 @@ set<spot::formula> EqDomain::construct_sysTstAP(const hset<string>& sysR)
 size_t EqDomain::hash(const P& p) { return p.hash_; }
 
 bool EqDomain::total_equal(const P& total_p1, const P& total_p2) { return total_p1.equal_to(total_p2); }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

@@ -13,6 +13,10 @@ class OrderDomain: public DataDomainInterface<OrdPartition>
 public:
     using P = OrdPartition;
 
+    // Convert "≥" into "= or >", convert "≠" into "< or >".
+    spot::twa_graph_ptr
+    preprocess(const spot::twa_graph_ptr&);
+
     P
     build_init_partition(const std::unordered_set<std::string>& sysR,
                          const std::unordered_set<std::string>& atmR) override;
@@ -45,11 +49,6 @@ public:
 
     spot::formula
     extract_sys_tst_from_p(const P& p) override;
-
-    // convert "≥" into "= or >", convert "≠" into "< or >"
-    // note: the test "True" is handled later
-    spot::twa_graph_ptr
-    preprocess(const spot::twa_graph_ptr&);
 
     // ----------------------------------------------------------------------------------------- //
 

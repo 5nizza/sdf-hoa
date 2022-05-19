@@ -166,9 +166,7 @@ sdf::reduce(DataDomainInterface<P>& domain, const twa_graph_ptr& reg_ucw, uint n
     twa_graph_ptr new_ucw;
     auto bdd_dict = spot::make_bdd_dict();
     new_ucw = spot::make_twa_graph(bdd_dict);
-    new_ucw->copy_acceptance_of(reg_ucw);
-    if (reg_ucw->prop_state_acc())
-        new_ucw->prop_state_acc(true);
+    new_ucw->copy_acceptance_of(reg_ucw);  // note that the acceptance can become transition-based
 
     // register names
     auto atmR = build_atmR(reg_ucw);
@@ -287,9 +285,8 @@ sdf::reduce(DataDomainInterface<P>& domain, const twa_graph_ptr& reg_ucw, uint n
                     if (!domain.out_is_implementable(p_io))
                         continue;
 
-//                    cout << "p_io: " << p_io << ", sys_tst: " << extract_sys_tst_from_p(p_io, sysR) << endl;
-//                    vector<vector<formula>> all_assignments;
-//                    all_assignments.emplace_back();  // means "emplace the default ctor element"
+//                    vector<vector<formula>> all_assignments;  // NB: this requires adding mutexcl edges
+//                    all_assignments.emplace_back();  // empty assignment
 //                    for (auto&&  reg : sysAsgn)
 //                        all_assignments.push_back({reg});
 //                    for (const auto& sys_asgn_atoms : all_assignments)  // this give 2x speedup _only_
@@ -327,6 +324,8 @@ sdf::reduce(DataDomainInterface<P>& domain, const twa_graph_ptr& reg_ucw, uint n
         } // for (e : rec_ucw->out(qp.first))
     } // while (!qp_todo.empty())
 
+    DEBUG("#iterations: " << j << ", #breaks: " << i << ", use ratio: " << ((float)(j-i))/j);
+
     // To every state,
     // we add an outgoing edge leading to the rejecting sink when the assumptions on _system_ are violated.
     // Assumptions on system:
@@ -338,8 +337,7 @@ sdf::reduce(DataDomainInterface<P>& domain, const twa_graph_ptr& reg_ucw, uint n
                           spot::formula_to_bdd(formula::tt(), new_ucw->get_dict(), new_ucw));
     // now add the edges
     add_edge_to_every_state(new_ucw, rej_sink, create_MUTEXCL_violation(sysOutR));
-
-    cout << "#iterations: " << j << ", #breaks: " << i << ", use ratio: " << ((float)(j-i))/j << endl;
+    // NB: when use singleton assignments, add mutexcl edges here forbiding storing into ≥2 registers
 
     return {new_ucw, sysTst, sysAsgn, sysOutR};
 }
@@ -358,9 +356,9 @@ void add_edge_to_every_state(twa_graph_ptr& atm,
 }
 
 
+/** return "none are true" OR "≥2 are true" */
 formula create_MUTEXCL_violation(const set<formula>& props_)
 {
-    // return "none are true" OR "≥2 are true"
     vector<formula> props(props_.begin(), props_.end());
     vector<formula> big_OR;
     big_OR.push_back(formula::Not(formula::Or(props)));
@@ -392,6 +390,20 @@ sdf::reduce<OrdPartition>(
 
 
 #include "reg/eq_partition.hpp"
+
+template
+std::tuple<spot::twa_graph_ptr,
+        std::set<spot::formula>,
+        std::set<spot::formula>,
+        std::set<spot::formula>>
+sdf::reduce<EqPartition>(
+        DataDomainInterface<EqPartition>& domain,
+        const spot::twa_graph_ptr& reg_ucw,
+        uint nof_sys_regs);
+
+
+// --------------------------------------------------------------------------
+
 
 void sdf::tmp()
 {

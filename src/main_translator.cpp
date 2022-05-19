@@ -9,6 +9,7 @@
 #include "ehoa_parser.hpp"
 #include "timer.hpp"
 #include "reg/order_domain.hpp"
+#include "reg/eq_domain.hpp"
 
 #define BDD spotBDD
     #include <spot/twaalgos/dot.hh>
@@ -78,6 +79,10 @@ int main(int argc, const char *argv[])
     args::Flag ppm(group, "ppm", "Medium postprocessing", {"ppm"});
     args::Flag pph(group, "pph", "High postprocessing", {"pph"});
 
+    args::Group group2(parser, "Data domain (default 'order domain'):", args::Group::Validators::AtMostOne);
+    args::Flag use_order_domain(group2, "ord", "Order Domain", {"ord"});
+    args::Flag use_eq_domain(group2, "eq", "Equality Domain", {"eq"});
+
     args::HelpFlag help
         (parser,
          "help",
@@ -125,14 +130,21 @@ int main(int argc, const char *argv[])
     auto [reg_ucw, inputs, outputs, is_moore] = read_ehoa(hoa_file_name);
     INF("input automaton: nof_states = " << reg_ucw->num_states() << ", nof_edges = " << reg_ucw->num_edges());
 
-    // construct the domain
-    auto domain = OrderDomain();
-    reg_ucw = domain.preprocess(reg_ucw);  // specific to LinOrderDomain
-
-    // main: reduce
-    auto [classical_ucw, sysTst, sysAsgn, sysOutR] =
-            reduce(domain, reg_ucw, b);
-    DEBUG("completed\nunprocessed: nof_states = " << classical_ucw->num_states() << ", nof_edges = " << classical_ucw->num_edges());
+    spot::twa_graph_ptr classical_ucw;
+    set<spot::formula> sysTst, sysAsgn, sysOutR;
+    if (!use_eq_domain)
+    {
+        auto order_domain = OrderDomain();
+        reg_ucw = order_domain.preprocess(reg_ucw);
+        tie(classical_ucw, sysTst, sysAsgn, sysOutR) = reduce(order_domain, reg_ucw, b);
+    }
+    else
+    {
+        auto eq_domain = EqDomain();
+        tie(classical_ucw, sysTst, sysAsgn, sysOutR) = reduce(eq_domain, reg_ucw, b);
+    }
+    DEBUG("completed");
+    DEBUG("unprocessed: nof_states = " << classical_ucw->num_states() << ", nof_edges = " << classical_ucw->num_edges());
 
     // simplify
     classical_ucw->merge_edges();
@@ -148,7 +160,7 @@ int main(int argc, const char *argv[])
     // since SPOT may remove unnecessary APs, we copy the original ones
     auto result_atm = post.run(classical_ucw);
     result_atm->copy_ap_of(classical_ucw);
-    if (!pph and !ppm) // other optimizations can remove states
+    if (!pph and !ppm)  // pph and ppm optimizations can remove states
         result_atm->copy_state_names_from(classical_ucw);
     INF("result: nof_states = " << result_atm->num_states() << ", nof_edges = " << result_atm->num_edges());
 
