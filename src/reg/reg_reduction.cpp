@@ -91,6 +91,8 @@ separate(const formula& cube)
 template<typename Container>
 Asgn compute_asgn(const Container& atm_asgn_atoms)
 {
+    // Note: the empty assignment (e.g. appears in label "1")
+    //       means 'do no assignments' (recall that assignments are treated in a special way)
     hmap<string, hset<string>> asgn_data;  // e.g.: { i -> {r1,r2}, o -> {r3,r4} }
     for (const auto& atom : atm_asgn_atoms)
     {
@@ -258,13 +260,13 @@ sdf::reduce(DataDomainInterface<P>& domain, const twa_graph_ptr& reg_ucw, uint n
             for (const auto& cube : get_cubes(e_f))
             {
                 /*  // NB: we assume that partitions are complete, which simplifies the algorithm.
-                    let partial_p_io = compute_partial_p_io(p, atm_tst_atoms) // p is complete, tst is partial => result is a partial partition
-                    let all_p_io = compute_all_p_io(partial_p_io)             // <-- (should be possible to incorporate sys_asgn-out_r enumeration, but good enough now)
+                    let partial_p_io = compute_partial_p_io(p, atm_tst)   // p is complete, tst is partial => result is a partial partition
+                    let all_p_io = compute_all_p_io(partial_p_io)         // <-- (should be possible to incorporate sys_asgn-out_r enumeration, but good enough now)
                     for every p_io in all_p_io:
                         for every sys_asgn:
-                            let p_io' = update(p_io, sys_asgn)                // update Rs
+                            let p_io' = update(p_io, sys_asgn)            // update Rs
                             let all_r = pick_all_r(p_io', sysR)
-                            let p_io'' = update(p_io', atm_asgn)              // update Ra
+                            let p_io'' = update(p_io', atm_asgn)          // update Ra
                             let p_succ = remove i and o from p_io''
                             add to classical_ucw the edge (q,p) -> (q_succ, p_succ) labelled (sys_tst(p_io) & ap(cube), sys_asgn, OR(all_r))
                             if (q_succ, p_succ) not in qp_processed:
