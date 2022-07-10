@@ -1,119 +1,70 @@
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "cert-err58-cpp"
 
-#include <string>
-#include <vector>
-
-#include "reg/ord_partition.hpp"
-
 #include "gtest/gtest.h"
 
+#include <vector>
 
-using namespace std;
+#include "reg/types.hpp"
+#include "reg/partition.hpp"
+
+
 using namespace sdf;
+using namespace std;
+using namespace graph;
 
-// TODO: add tests for Partition
-// TODO: add tests for compute_partial_p_io
+#define Vset unordered_set<V>
+#define hmap unordered_map
 
-/*
 
-struct Partition1: public testing::Test
+TEST(PartitionTest, GetCanonical1)
 {
-    Partition p = Partition({{"r1"}, {"r2"}, {"r3"}});
-};
+    // We test: sorting, unnecessary-edges removal, vertex renaming:
+    // 1->2->3, 1->3, 1≠3, 1≠2; 1->{z1,z2}, 2->{y}, 3->{x,z3}
+    // after canonize should become:
+    // 0<-1<-2, 0->{x,z3}, 1->{y}, 2->{z1,z2}
+    auto p = Partition(SpecialGraph({{1,2},{2,3},{1,3}},  // ->
+                                    {{1,3},{1,2}}),       // ≠
+                       {{1,{"z1","z2"}}, {2,{"y"}}, {3,{"x","z3"}}});
 
-TEST_F(Partition1, compute_partial_p_io)
-{
-    {
-        cout << "-------------" << endl;
-        auto tst = TstAtom(Partition({{"i"}, {"o"}}),
-                           {{"i", Cmp::Between("r1", "r2")},
-                        {"o", Cmp::Between("r2", "r3")}});
-        Asgn a({{"i", {"r1", "r3"}}});
+    auto p_expected = Partition(SpecialGraph({{2,1},{1,0}}, {}),
+                                {{2,{"z1","z2"}}, {1,{"y"}}, {0,{"x","z3"}}});
 
-        EXPECT_EQ(Algo::compute_next(p, tst, a).to_str(),
-                  "r1=r3<r2");
-    }
-
-    {
-        cout << "-------------" << endl;
-        auto tst = TstAtom(Partition({{"i"}, {"o"}}),
-                           {{"i", Cmp::Below("r1")},
-                        {"o", Cmp::Above("r3")}});
-        Asgn a({{"i", {"r3"}},
-                {"o", {"r1"}}});
-
-        EXPECT_EQ(Algo::compute_next(p, tst, a).to_str(),
-                  "r3<r2<r1");
-    }
-
-    {
-        cout << "-------------" << endl;
-        auto tst = TstAtom(Partition({{"i"}, {"o"}}),
-                           {{"i", Cmp::Above("r3")},
-                        {"o", Cmp::Above("r3")}});
-        Asgn a({{"i", {"r3"}},
-                {"o", {"r1"}}});
-
-        EXPECT_EQ(Algo::compute_next(p, tst, a).to_str(),
-                  "r2<r3<r1");
-    }
-
-    {
-        cout << "-------------" << endl;
-        auto tst = TstAtom(Partition({{"i"},
-                                      {"o"}}),
-                           {{"i", Cmp::Equal("r3")},
-                        {"o", Cmp::Equal("r1")}});
-        Asgn a({{"i", {"r1"}},
-                {"o", {"r3"}}});
-
-        EXPECT_EQ(Algo::compute_next(p, tst, a).to_str(),
-                  "r3<r2<r1");
-    }
-
-    {
-        cout << "-------------" << endl;
-        auto tst = TstAtom(Partition({set<string>({"i", "o"})}),
-                           {{"i", Cmp::Equal("r2")},
-                        {"o", Cmp::Equal("r2")}});
-        Asgn a({{"i", {"r1"}},
-                {"o", {"r3"}}});
-
-        EXPECT_EQ(Algo::compute_next(p, tst, a).to_str(),
-                  "r1=r2=r3");
-    }
+    auto p_actual = PartitionCanonical(p);
+    ASSERT_EQ(p_expected, p_actual.p);
 }
 
-
-struct Partition2: public testing::Test { Partition p = Partition({{"r1", "r2", "r3"}}); };
-TEST_F(Partition2, ComputeNext)
+TEST(PartitionTest, GetCanonical2)
 {
-    {
-        cout << "-------------" << endl;
-        auto tst = TstAtom(Partition({{"o"}, {"i"}}),
-                           {{"i", Cmp::Above("r2")},
-                        {"o", Cmp::Below("r1")}});
-        Asgn a({{"i", {"r3"}},
-                {"o", {"r1"}}});
+    // Test the corner case (no edges at all); so only sorting and renaming should kick in.
+    // 1->{z1,z2}, 2->{y}, 3->{x,z3}
+    // after canonize should become:
+    // 0->{x,z3}, 1->{y}, 2->{z1,z2}
+    auto p = Partition(SpecialGraph({1,2,3}),
+                       {{1,{"z1","z2"}}, {2,{"y"}}, {3,{"x","z3"}}});
 
-        EXPECT_EQ(Algo::compute_next(p, tst, a).to_str(),
-                  "r1<r2<r3");
-    }
+    auto p_expected = Partition(SpecialGraph({0,1,2}),
+                                {{2,{"z1","z2"}}, {1,{"y"}}, {0,{"x","z3"}}});
 
-    {
-        cout << "-------------" << endl;
-        auto tst = TstAtom(Partition({{"o"}, {"i"}}),
-                           {{"i", Cmp::Equal("r2")},
-                        {"o", Cmp::Below("r1")}});
-        Asgn a({{"i", {"r3"}},
-                {"o", {"r1"}}});
-
-        EXPECT_EQ(Algo::compute_next(p, tst, a).to_str(),
-                  "r1<r2=r3");
-    }
+    auto p_actual = PartitionCanonical(p);
+    ASSERT_EQ(p_expected, p_actual.p);
 }
-*/
+
+TEST(PartitionTest, PartitionCanonicalEqual)
+{
+    auto p1 = Partition(SpecialGraph({},{{1,2}}),
+                        {{1,{"a","b"}}, {2,{"c"}}});
+
+    auto p2 = Partition(SpecialGraph({},{{20,1}}),
+                        {{20,{"a","b"}}, {1,{"c"}}});
+
+    ASSERT_TRUE(PartitionCanonical(p1) == PartitionCanonical(p2));
+
+    p1.graph.add_vertex(3);
+    p1.v_to_ec.insert({3,{"d"}});
+
+    ASSERT_FALSE(PartitionCanonical(p1) == PartitionCanonical(p2));
+}
 
 
 int main(int argc, char** argv)

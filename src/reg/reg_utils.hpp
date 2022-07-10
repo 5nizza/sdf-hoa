@@ -2,7 +2,6 @@
 
 #include <algorithm>
 
-#include "graph.hpp"
 #include "my_assert.hpp"
 #include "reg/types.hpp"
 #include "../utils.hpp"
@@ -12,7 +11,7 @@ namespace sdf
 {
 
 inline
-V add_vertex(graph::Graph& g,
+V add_vertex(graph::SpecialGraph& g,
              VtoEC& v_to_ec,
              const std::string& var_name)
 {
@@ -28,7 +27,7 @@ V add_vertex(graph::Graph& g,
 
 inline
 V get_vertex_of(const std::string& var,
-                const graph::Graph& g,
+                const graph::SpecialGraph& g,
                 const VtoEC& v_to_ec)
 {
     for (const auto& v : g.get_vertices())

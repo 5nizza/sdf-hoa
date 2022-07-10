@@ -2,7 +2,7 @@
 
 #include "asgn.hpp"
 #include "ehoa_parser.hpp"
-#include "utils.hpp"
+#include "reg_utils.hpp"
 #include "atm_parsing_naming.hpp"
 
 
@@ -16,6 +16,8 @@ using namespace std;
 using namespace sdf;
 using formula = spot::formula;
 using twa_graph_ptr = spot::twa_graph_ptr;
+using P = Partition;
+using PH = PartitionCanonical;
 
 
 #define DEBUG(message) {spdlog::get("console")->debug() << message;}  // NOLINT(bugprone-macro-parentheses)
@@ -157,12 +159,14 @@ construct_AsgnOut(const hset<string>& sysR)
 }
 
 
-template<typename P>
 tuple<twa_graph_ptr,  // new_ucw
       set<formula>,   // sysTst
       set<formula>,   // sysAsgn
       set<formula>>   // sysOutR
-sdf::reduce(DataDomainInterface<P>& domain, const twa_graph_ptr& reg_ucw, uint nof_sys_regs)
+sdf::reduce(DataDomainInterface& domain,
+            const twa_graph_ptr& reg_ucw,
+            const hset<string>& sysR,
+            const hmap<string,Relation>& sys_tst_descr)
 {
     // create new_ucw
     twa_graph_ptr new_ucw;
@@ -171,8 +175,7 @@ sdf::reduce(DataDomainInterface<P>& domain, const twa_graph_ptr& reg_ucw, uint n
     new_ucw->copy_acceptance_of(reg_ucw);  // note that the acceptance can become transition-based
 
     // register names
-    auto atmR = build_atmR(reg_ucw);
-    auto sysR = build_sysR(nof_sys_regs);
+    auto atmR = extract_atmR(reg_ucw);
     assert_no_intersection(sysR, atmR);
 
     // create sysTst, sysAsgn, sysOutR
@@ -190,15 +193,17 @@ sdf::reduce(DataDomainInterface<P>& domain, const twa_graph_ptr& reg_ucw, uint n
     // -- the main part --
 
     // (technical detail) define hash function and equality for partitions
-    using QP = pair<uint, P>;
-    auto qp_hasher = [&domain](const QP& qp)
+    using QP = pair<uint, PartitionCanonical>;
+    auto qp_hasher = [](const QP& qp)
             {
                  auto uint_hasher = [](const uint& i) {return std::hash<uint>()(i);};
-                 auto p_hasher = [&domain](const P& p) {return domain.hash(p);};
+                 auto p_hasher = [](const PH& p) {return p.hash;};
                  return do_hash_pair(qp, uint_hasher, p_hasher);
             };
-    auto qp_equal_to = [&domain](const QP& qp1, const QP& qp2)
-            { return qp1.first==qp2.first && domain.total_equal(qp1.second, qp2.second); };
+    auto qp_equal_to = [](const QP& qp1, const QP& qp2)
+    {
+        return qp1.first==qp2.first && qp1.second == qp2.second;
+    };
 
     auto qp_to_c = hmap<QP, uint,
                         decltype(qp_hasher),
@@ -219,7 +224,7 @@ sdf::reduce(DataDomainInterface<P>& domain, const twa_graph_ptr& reg_ucw, uint n
                         names->push_back(string());  // a dummy name for not yet used states (should not happen, 'just in case')
 
                     stringstream ps;
-                    ps << qp.second;
+                    ps << qp.second.p;
                     auto p_str = substituteAll(ps.str(), " ", "");
                     stringstream ss;
                     ss << qp.first << ", " << p_str;
@@ -236,11 +241,44 @@ sdf::reduce(DataDomainInterface<P>& domain, const twa_graph_ptr& reg_ucw, uint n
     auto qp_processed = QPHashSet(0, qp_hasher, qp_equal_to);
     auto qp_todo = QPHashSet(0, qp_hasher, qp_equal_to);
 
-    auto init_qp = make_pair(reg_ucw->get_init_state_number(), domain.build_init_partition(sysR, atmR));
+    auto init_p = domain.build_init_partition(sysR, atmR);
+    cout << "init_p: " << init_p << endl;
+    QP init_qp = {reg_ucw->get_init_state_number(), PartitionCanonical(init_p)};
     new_ucw->set_init_state(get_c(init_qp));
     qp_todo.insert(init_qp);
 
-    int i=0, j=0;
+    // How are pure Equality and Order domains handled by this algorithm?
+    // The following methods depend on the domain type:
+    // `preprocess`
+    // `all_possible_atm_tst`
+    // `all_possible_sys_tst` (?)
+    // The Order domain can be handled within Mixed Domain,
+    // by providing the complete set of system predicates.
+    // However, for the Equality domain, the function `all_possible_atm_tst`
+    // should account for the fact that T (wrt. a single reg) means = or ≠
+    // rather than > < or =. The function `preprocess` should also be changed:
+    // in the Equality, there is no need to translate ≠ into '< or >'.
+
+    /*
+    while qp_todo is not empty:
+        let (q,p) = qp_todo.pop()
+        add (q,p) to qp_processed
+        for (lab, atm_tst, atm_asgn, q') in reg_ucw.out(q):
+            for (p_io,full_atm_tst) in all_possible_atm_tst(p,atm_tst):        // p_io is a refinement of p_io(=p+atm_tst) wrt. full_atm_tst
+                for (p_io', sys_tst) in all_possible_sys_tst(p_io, sys_pred):  // p_io' is a refinement of p_io wrt. sys_tst (2nd step hidden: only allowed sys_tst are used)
+                    for every sys_asgn:                                        // p_io' is partial since sys_tst is not complete in general
+                        let p_io'' = update(p_io', sys_asgn)      // update Rs
+                        let all_r = pick_all_r(p_io'', sysR)
+                        if all_r is empty: skip
+                        let p_io''' = update(p_io'', atm_asgn)    // update Ra
+                        let p_succ = remove i and o from p_io'''
+                        add to classical_ucw the edge (q,p) -> (q_succ, p_succ) labelled (sys_tst & lab, sys_asgn, OR(all_r))
+                        make p_succ canonical
+                        if (q_succ, p_succ) not in qp_processed:
+                            add (q_succ, p_succ) to c_todo
+    */
+
+    /// CONTINUE IMPLEMENTING METHODS (of the domain)
     while (!qp_todo.empty())
     {
         DEBUG("qp_todo.size() = " << qp_todo.size() << ", "
@@ -252,81 +290,56 @@ sdf::reduce(DataDomainInterface<P>& domain, const twa_graph_ptr& reg_ucw, uint n
 
         for (const auto& e: reg_ucw->out(qp.first))
         {
-//            cout << e.src << " -" << e.cond << "-> " << e.dst << endl;
-            auto e_f = spot::bdd_to_formula(e.cond, reg_ucw->get_dict());
-            // e_f is in DNF or true
-
-            // iterate over individual edges
-            for (const auto& cube : get_cubes(e_f))
+            auto e_f = spot::bdd_to_formula(e.cond, reg_ucw->get_dict());  // e_f is true or a DNF formula
+            for (const auto& cube : get_cubes(e_f))                        // iterate over individual edges
             {
-                /*  // NB: we assume that partitions are complete, which simplifies the algorithm.
-                    let partial_p_io = compute_partial_p_io(p, atm_tst)   // p is complete, tst is partial => result is a partial partition
-                    let all_p_io = compute_all_p_io(partial_p_io)         // <-- (should be possible to incorporate sys_asgn-out_r enumeration, but good enough now)
-                    for every p_io in all_p_io:
-                        for every sys_asgn:
-                            let p_io' = update(p_io, sys_asgn)            // update Rs
-                            let all_r = pick_all_r(p_io', sysR)
-                            let p_io'' = update(p_io', atm_asgn)          // update Ra
-                            let p_succ = remove i and o from p_io''
-                            add to classical_ucw the edge (q,p) -> (q_succ, p_succ) labelled (sys_tst(p_io) & ap(cube), sys_asgn, OR(all_r))
-                            if (q_succ, p_succ) not in qp_processed:
-                                add (q_succ, p_succ) to c_todo
-                */
-
                 auto [APs, atm_tst_atoms, atm_asgn_atoms] = separate(cube);
                 auto atm_asgn = compute_asgn(atm_asgn_atoms);
 
-                auto partial_p_i = domain.compute_partial_p_io(qp.second, atm_tst_atoms);
-                if (!partial_p_i.has_value())  // means atm_tst_atoms are not consistent
-                    continue;
-                for (const auto& p_io : domain.compute_all_p_io(partial_p_i.value()))
+                auto p = Partition(qp.second.p);  // (a modifiable copy)
+
+                for (const auto& [p_io, atm_full_tst] : domain.all_possible_atm_tst(p,atm_tst_atoms))
                 {
-                    // early break:
-                    // if o does not belong to the class of i or some sys_reg,
-                    // then o cannot be realised
-                    if (!domain.out_is_implementable(p_io))
-                        continue;
+                    for (auto& [p_sys, sys_tst] : domain.all_possible_sys_tst(p_io, sys_tst_descr)) // p_sys is a refinement of p_io wrt. sys_tst (2nd step hidden: only allowed sys_tst are used)
+                    {
+                        // early break: if o does not belong to the class of i or some sys_reg, then o cannot be realised
+//                    if (!domain.out_is_implementable(p_io)) continue;
 
 //                    vector<vector<formula>> all_assignments;  // NB: this requires adding mutexcl edges
 //                    all_assignments.emplace_back();  // empty assignment
 //                    for (auto&&  reg : sysAsgn)
 //                        all_assignments.push_back({reg});
 //                    for (const auto& sys_asgn_atoms : all_assignments)  // this give 2x speedup _only_
-                    for (const auto& sys_asgn_atoms : all_subsets<formula>(sysAsgn))
-                    {
-                        j++;
-                        auto sys_asgn = compute_asgn(sys_asgn_atoms);
-                        auto p_io_ = domain.update(p_io, sys_asgn);
-                        auto all_r = domain.pick_R(p_io_);
-                        // p_io is complete, hence we should continue only if `o` lies in one of ECs with system regs in it
-                        if (all_r.empty())
+                        for (const auto& sys_asgn_atoms : all_subsets<formula>(sysAsgn))
                         {
-                            i++;
-                            continue;
+                            auto sys_asgn = compute_asgn(sys_asgn_atoms);
+                            domain.update(p_sys, sys_asgn);              // update Rs
+                            auto all_r = domain.pick_all_r(p_sys);
+                            if (all_r.empty())
+                                continue;  // skip if `o` not in any ECs with system regs in it
+
+                            domain.update(p_sys, atm_asgn);              // update Ra
+                            domain.remove_io_from_p(p_sys);
+                            auto p_succ = PartitionCanonical(p_sys);
+                            QP qp_succ = {e.dst, p_succ};
+
+                            /* add the edge (q,p) -> (q_succ, p_succ) labelled (sys_tst & ap(cube), sys_asgn, out_r) */
+                            auto cond = formula::And({asgn_to_formula(sys_asgn, sysAsgn),
+                                                      sys_tst,
+                                                      R_to_formula(all_r),
+                                                      formula::And(vector<formula>(APs.begin(), APs.end()))});
+                            new_ucw->new_edge(c_of_qp, get_c(qp_succ),
+                                              spot::formula_to_bdd(cond, new_ucw->get_dict(), new_ucw),
+                                              e.acc);
+
+                            if (!qp_processed.count(qp_succ))
+                                qp_todo.insert(qp_succ);
                         }
-                        auto p_io__ = domain.update(p_io_, atm_asgn);  // NOLINT(bugprone-reserved-identifier)
-                        auto p_succ = domain.remove_io_from_p(p_io__);
-
-                        auto qp_succ = make_pair(e.dst, p_succ);
-
-                        /* add to classical_ucw the edge (q,p) -> (q_succ, p_succ) labelled (sys_tst(p_io) & ap(cube), sys_asgn, out_r) */
-                        auto cond = formula::And({asgn_to_formula(sys_asgn, sysAsgn),
-                                                  domain.extract_sys_tst_from_p(p_io),
-                                                  R_to_formula(all_r),
-                                                  formula::And(vector<formula>(APs.begin(), APs.end()))});
-                        new_ucw->new_edge(c_of_qp, get_c(qp_succ),
-                                          spot::formula_to_bdd(cond, new_ucw->get_dict(), new_ucw),
-                                          e.acc);
-
-                        if (!qp_processed.count(qp_succ))
-                            qp_todo.insert(qp_succ);
                     }
                 }
             } // for (cube : get_cubes(e_f))
         } // for (e : rec_ucw->out(qp.first))
     } // while (!qp_todo.empty())
-
-    DEBUG("#iterations: " << j << ", #breaks: " << i << ", use ratio: " << ((float)(j-i))/j);
 
     // To every state,
     // we add an outgoing edge leading to the rejecting sink when the assumptions on _system_ are violated.
@@ -339,9 +352,12 @@ sdf::reduce(DataDomainInterface<P>& domain, const twa_graph_ptr& reg_ucw, uint n
                           spot::formula_to_bdd(formula::tt(), new_ucw->get_dict(), new_ucw));
     // now add the edges
     add_edge_to_every_state(new_ucw, rej_sink, create_MUTEXCL_violation(sysOutR));
-    // NB: when use singleton assignments, add mutexcl edges here forbiding storing into ≥2 registers
+    // NB: when use singleton assignments, ADD mutexcl edges here forbiding storing into ≥2 registers
 
     return {new_ucw, sysTst, sysAsgn, sysOutR};
+
+    // int i=0, j=0;
+    // DEBUG("#iterations: " << j << ", #breaks: " << i << ", use ratio: " << ((float)(j-i))/j);
 }
 
 /* Add an edge labelled `label` into `dst_state` from every state except `dst_state` itself. */
@@ -369,42 +385,6 @@ formula create_MUTEXCL_violation(const set<formula>& props_)
             big_OR.push_back(formula::And({props.at(i1), props.at(i2)}));
     return formula::Or(big_OR);
 }
-
-
-// Explicit instantiation of the known cases.
-// We must explicitly instantiate the template function
-// for the known cases, so that the compiler instantiates and constructs
-// their definition. Unfortunately, it is not smart enough to
-// automatically recognise all the instantiations used in the program (and construct their definitions).
-
-#include "ord_partition.hpp"
-
-template
-std::tuple<spot::twa_graph_ptr,
-        std::set<spot::formula>,
-        std::set<spot::formula>,
-        std::set<spot::formula>>
-sdf::reduce<OrdPartition>(
-        DataDomainInterface<OrdPartition>& domain,
-        const spot::twa_graph_ptr& reg_ucw,
-        uint nof_sys_regs);
-
-
-
-#include "reg/eq_partition.hpp"
-
-template
-std::tuple<spot::twa_graph_ptr,
-        std::set<spot::formula>,
-        std::set<spot::formula>,
-        std::set<spot::formula>>
-sdf::reduce<EqPartition>(
-        DataDomainInterface<EqPartition>& domain,
-        const spot::twa_graph_ptr& reg_ucw,
-        uint nof_sys_regs);
-
-
-// --------------------------------------------------------------------------
 
 
 void sdf::tmp()

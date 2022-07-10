@@ -1,7 +1,7 @@
 #pragma once
 
 #include "my_assert.hpp"
-#include "utils.hpp"
+#include "reg_utils.hpp"
 
 
 #define BDD spotBDD
@@ -97,7 +97,7 @@ std::pair<std::string, std::string> parse_asgn_atom(const std::string& asgn_atom
 
 /* string names for system registers */             // TODO: do we really need to expose this?
 inline
-std::unordered_set<std::string> build_sysR(uint nof_sys_regs)
+std::unordered_set<std::string> construct_sysR(uint nof_sys_regs)
 {
     std::unordered_set<std::string> result;
     for (uint i = 1; i<= nof_sys_regs; ++i)
@@ -107,7 +107,7 @@ std::unordered_set<std::string> build_sysR(uint nof_sys_regs)
 
 /* extract string names of automaton registers */   // TODO: do we really need to expose this?
 inline
-std::unordered_set<std::string> build_atmR(const spot::twa_graph_ptr& reg_atm)
+std::unordered_set<std::string> extract_atmR(const spot::twa_graph_ptr& reg_atm)
 {
     std::unordered_set<std::string> result;
     for (const auto& ap : reg_atm->ap())

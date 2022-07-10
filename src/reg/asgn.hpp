@@ -6,7 +6,7 @@
 #include <unordered_set>
 
 #include "my_assert.hpp"
-#include "utils.hpp"
+#include "reg_utils.hpp"
 
 namespace sdf
 {

@@ -13,7 +13,7 @@
 
 #include "my_assert.hpp"
 #include "graph.hpp"
-#include "utils.hpp"
+#include "reg_utils.hpp"
 
 
 namespace sdf

@@ -8,8 +8,9 @@
 #include "reg/reg_reduction.hpp"
 #include "ehoa_parser.hpp"
 #include "timer.hpp"
-#include "reg/order_domain.hpp"
-#include "reg/eq_domain.hpp"
+#include "reg/mixed_domain.hpp"
+#include "reg/atm_parsing_naming.hpp"
+
 
 #define BDD spotBDD
     #include <spot/twaalgos/dot.hh>
@@ -79,9 +80,10 @@ int main(int argc, const char *argv[])
     args::Flag ppm(group, "ppm", "Medium postprocessing", {"ppm"});
     args::Flag pph(group, "pph", "High postprocessing", {"pph"});
 
-    args::Group group2(parser, "Data domain (default 'order domain'):", args::Group::Validators::AtMostOne);
-    args::Flag use_order_domain(group2, "ord", "Order Domain", {"ord"});
-    args::Flag use_eq_domain(group2, "eq", "Equality Domain", {"eq"});
+    // First, MixedOrder domain, then re-implement Equality.
+    // args::Group group2(parser, "Data domain (default 'order domain'):", args::Group::Validators::AtMostOne);
+    // args::Flag use_order_domain(group2, "ord", "Order Domain", {"ord"});
+    // args::Flag use_eq_domain(group2, "eq", "Equality Domain", {"eq"});
 
     args::HelpFlag help
         (parser,
@@ -130,19 +132,18 @@ int main(int argc, const char *argv[])
     auto [reg_ucw, inputs, outputs, is_moore] = read_ehoa(hoa_file_name);
     INF("input automaton: nof_states = " << reg_ucw->num_states() << ", nof_edges = " << reg_ucw->num_edges());
 
+    // I start with the Mixed domain (that is, Order with partial tracking),
+    // and implement the Equality domain later.
+
     spot::twa_graph_ptr classical_ucw;
     set<spot::formula> sysTst, sysAsgn, sysOutR;
-    if (!use_eq_domain)
-    {
-        auto order_domain = OrderDomain();
-        reg_ucw = order_domain.preprocess(reg_ucw);
-        tie(classical_ucw, sysTst, sysAsgn, sysOutR) = reduce(order_domain, reg_ucw, b);
-    }
-    else
-    {
-        auto eq_domain = EqDomain();
-        tie(classical_ucw, sysTst, sysAsgn, sysOutR) = reduce(eq_domain, reg_ucw, b);
-    }
+    auto sysR = construct_sysR(b);
+    auto domain = MixedDomain();
+    hmap<string,Relation> sys_tst_descr;
+    for (const auto& rs : sysR)
+        sys_tst_descr.insert({rs,Relation::equal});  // let's start with = wrt. for all sys registers
+    reg_ucw = domain.preprocess(reg_ucw);
+    tie(classical_ucw, sysTst, sysAsgn, sysOutR) = reduce(domain, reg_ucw, sysR, sys_tst_descr);
     DEBUG("completed");
     DEBUG("unprocessed: nof_states = " << classical_ucw->num_states() << ", nof_edges = " << classical_ucw->num_edges());
 
