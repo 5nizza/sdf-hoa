@@ -21,15 +21,31 @@ struct GraphAlgo
 
     /**
      Use parameter `insert` to save a descendant into your favorite container.
-     Note: uses BFS, hence elements are inserted in the order of the distance from `vertex`.
+     Notes:
+     - uses BFS, hence elements are inserted in the order of the distance from `vertex`.
+     - if the function `insert` returns false, the walk is interrupted
+       (for instance, if you are not interested in walking everything).
+      @returns: true iff the walk was interrupted (the intention is to interrupt when "a certain element is found")
+      @param do_and_stop: do smth on each new ancestor; if it returns true, we interrupt the walk.
+      Complexity: O(n^2) worst case.
     */
-    static void get_descendants(const SpecialGraph& g, const V& vertex, const std::function<void(const V&)>& insert);
+    static bool walk_descendants(const SpecialGraph& g,
+                                 const V& vertex,
+                                 const std::function<bool(const V&)>& do_and_stop);
 
     /**
      Use parameter `insert` to save a descendant into your favorite container.
-     Note: uses BFS, hence elements are inserted in the order of the distance from `vertex`.
+     Notes:
+     - uses BFS, hence elements are inserted in the order of the distance from `vertex`.
+     - if the function `insert` returns false, the walk is interrupted
+       (for instance, if you are not interested in walking everything).
+      @returns: true iff the walk was interrupted (the intention is to interrupt when "a certain element is found")
+      @param do_and_stop: do smth on each new ancestor; if it returns true, we interrupt the walk.
+      Complexity: O(n^2) worst case.
     */
-    static void get_ancestors(const SpecialGraph& g, const V& vertex, const std::function<void(const V&)>& insert);
+    static bool walk_ancestors(const SpecialGraph& g,
+                               const V& vertex,
+                               const std::function<bool(const V&)>& do_and_stop);
 
     /**
      (For directed edges only.)
@@ -59,6 +75,8 @@ struct GraphAlgo
     /** Complexity: O(V^3), maybe less (I didn't analyse) */
     static bool has_dir_cycles(const SpecialGraph& g);
 
+    static bool has_neq_self_loops(const SpecialGraph& g);
+
     /**
      The standard topological sorting (the number of vertices equals that of g, and they respect the original constraints g).
      Note: in the result, every graph is a minimal linear ordering of the vertices (=> no reduntant edges).
@@ -68,10 +86,10 @@ struct GraphAlgo
     all_topo_sorts(const SpecialGraph& g);
 
     /**
-     This version allows for simultaneous placement, thus the number of vertices may decrease (while still respecting the constraints g).
-     Note: we do not merge vertices a,b if a-b (connected via neq edge)
-     Note: as before, in the result, every graph is a minimal linear ordering of the vertices (thus has no reduntant edges).
-     Note: a vertex in a result graph maps to a set of vertices of the original `g` (via the returned mapping).
+     This version allows for simultaneous placement, however we forbid merging of two vertices a,b if a-b (connected via neq edge).
+     Note: the number of vertices on a resulting graph may decrease.
+     Note: As before, in the result, every graph is a minimal linear ordering of the vertices (thus has no reduntant edges).
+     Note: A vertex in a result graph maps to a set of vertices of the original `g` (via the returned mapping).
      Complexity: exponential in the worst case (unavoidable).
     */
     static std::vector<std::pair<SpecialGraph, std::unordered_map<V,std::unordered_set<V>>>>

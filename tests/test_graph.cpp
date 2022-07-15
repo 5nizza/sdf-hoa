@@ -143,17 +143,17 @@ TEST(GraphTest, GetDescendantsAncestors)
     g.add_vertex(5);
 
     Vset result;
-    auto insert = [&result](const V& v){result.insert(v);};
+    auto insert = [&result](const V& v){result.insert(v); return false;};
 
-    GraphAlgo::get_descendants(g,1,insert);
+    GraphAlgo::walk_descendants(g, 1, insert);
     ASSERT_EQ(result, Vset({1,2,3,4}));
 
     result.clear();
-    GraphAlgo::get_descendants(g,2,insert);
+    GraphAlgo::walk_descendants(g, 2, insert);
     ASSERT_EQ(result, Vset({3,4}));
 
     result.clear();
-    GraphAlgo::get_descendants(g,4, insert);
+    GraphAlgo::walk_descendants(g, 4, insert);
     ASSERT_TRUE(result.empty());
 }
 
@@ -182,6 +182,14 @@ void assert_equal_content(const ContainerT1& c1, const ContainerT2& c2)
     for (const auto& e : c2)
         if (find(c1.begin(), c1.end(), e) == c1.end())
             ASSERT_TRUE(false) << "container 2 has a value not present in container 1" << endl;
+}
+
+
+TEST(GraphTest, AllTopoSortsSpecialCase)
+{
+    /// test that all_topo_sorts returns a singleton for total-order graphs
+    ASSERT_TRUE(GA::all_topo_sorts(SpecialGraph({{1,2},{2,3}},{})).size() == 1);
+    ASSERT_TRUE(GA::all_topo_sorts2(SpecialGraph({{1,2},{2,3}},{})).size() == 1);
 }
 
 

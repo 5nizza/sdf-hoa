@@ -26,12 +26,11 @@ V add_vertex(graph::SpecialGraph& g,
 }
 
 inline
-V get_vertex_of(const std::string& var,
-                const graph::SpecialGraph& g,
-                const VtoEC& v_to_ec)
+V
+get_vertex_of(const std::string& var, const VtoEC& v_to_ec)
 {
-    for (const auto& v : g.get_vertices())
-        if (v_to_ec.at(v).count(var))
+    for (const auto& [v,ec] : v_to_ec)
+        if (ec.count(var))
             return v;
 
     MASSERT(0,

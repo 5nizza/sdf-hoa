@@ -1,3 +1,4 @@
+#include <queue>
 #include "reg/mixed_domain.hpp"
 #include "reg/atm_parsing_naming.hpp"
 
@@ -23,11 +24,9 @@ using GA = graph::GraphAlgo;
 using P = Partition;
 
 
-// convert "≥" into two edges "= or >", convert "≠" into two edges "< or >"
 twa_graph_ptr
 MixedDomain::preprocess(const twa_graph_ptr& reg_ucw)
 {
-    // TODO: check that it indeed makes sense
     twa_graph_ptr g = spot::make_twa_graph(reg_ucw->get_dict());
     g->copy_ap_of(reg_ucw);
     g->copy_acceptance_of(reg_ucw);
@@ -67,7 +66,7 @@ MixedDomain::preprocess(const twa_graph_ptr& reg_ucw)
                 continue;
 
             auto [t1,t2,cmp] = parse_tst(ap.ap_name());
-            if (cmp == ">" or cmp == "<" or cmp == "=")
+            if (cmp == ">" or cmp == "<" or cmp == "=" or cmp == "≠")
                 continue;
 
             formula ap1, ap2;
@@ -80,11 +79,6 @@ MixedDomain::preprocess(const twa_graph_ptr& reg_ucw)
             {
                 ap1 = formula::ap(t1 + "<" + t2);  // NOLINT
                 ap2 = formula::ap(t1 + "=" + t2);  // NOLINT
-            }
-            if (cmp == "≠")
-            {
-                ap1 = formula::ap(t1 + "<" + t2);  // NOLINT
-                ap2 = formula::ap(t1 + ">" + t2);  // NOLINT
             }
 
             g->register_ap(ap1);
@@ -126,21 +120,276 @@ MixedDomain::build_init_partition(const string_hset& sysR,
     return {g,v_to_ec};
 }
 
-bool MixedDomain::compute_partial_p_io(P& p,
-                                       const unordered_set<spot::formula>& atm_tst_atoms)
+
+optional<P>
+add_io_info(const P& p, const hset<formula>& atm_tst_atoms)
 {
-    return false;
+    // copy
+    auto g = p.graph;
+    auto v_to_ec = p.v_to_ec;
+
+    add_vertex(g, v_to_ec, IN);
+    add_vertex(g, v_to_ec, OUT);
+
+    for (const auto& tst_atom : atm_tst_atoms)
+    {
+        auto [t1, t2, cmp] = parse_tst(tst_atom.ap_name());
+        MASSERT(cmp != "≥" && cmp != "≤", "should be handled before");
+        MASSERT(! (is_reg_name(t1) && is_reg_name(t2)), "not supported");
+
+        auto v1 = get_vertex_of(t1, v_to_ec),
+             v2 = get_vertex_of(t2, v_to_ec);
+
+        if (cmp == "=")
+        {
+            if (v1 == v2)
+                continue;
+
+            GA::merge_v1_into_v2(g, v1, v2);
+            auto v1_ec = v_to_ec.at(v1);
+            v_to_ec.at(v2).insert(v1_ec.begin(), v1_ec.end());
+            v_to_ec.erase(v1);
+        }
+        else if (cmp == ">")  // t1 > t2
+            g.add_dir_edge(v1, v2);
+        else if (cmp == "<")
+            g.add_dir_edge(v2, v1);
+        else if (cmp == "≠")
+            g.add_neq_edge(v1, v2);
+        else
+            MASSERT(0, "unreachable: " << cmp);
+    }
+
+    if (GA::has_dir_cycles(g) || GA::has_neq_self_loops(g))
+        return {};
+
+    return Partition(g, v_to_ec);
 }
 
-vector<std::pair<P,formula>> MixedDomain::all_possible_atm_tst(const P& partial_p_io, const std::unordered_set<spot::formula>& atm_tst_atoms)
+/** Keep a vertex iff it has an automaton register in its EC;
+    I.e., remove the vertices consisting of purely system registers. */
+P
+extract_atm_p(const P& p)
 {
-    return {};
+    // copy
+    auto new_v_to_ec = p.v_to_ec;
+    auto new_g = p.graph;
+
+    for (const auto& [v,ec] : p.v_to_ec)  // we modify new_v_to_ec => iterate over its const copy
+    {
+        if (all_of(ec.begin(), ec.end(), is_sys_reg_name))
+        {
+            GA::close_vertex(new_g, v);
+            new_v_to_ec.erase(v);
+        }
+    }
+
+    return {new_g, new_v_to_ec};
 }
 
-vector<pair<P, spot::formula>> MixedDomain::all_possible_sys_tst(const P& p_io,
-                                                                 const unordered_map<string, Relation>& sys_tst_descr)
+vector<P>
+compute_all_p_io(const P& p_io)
 {
-    return {};
+    vector<P> result;
+    for (const auto& [new_g,mapper] : GA::all_topo_sorts2(p_io.graph))  // Note: since only IN and OUT are loose, and p_io is complete for Ratm, the complexity is O(n^2)
+    {
+        hmap<V,EC> new_v_to_ec;
+        for (auto&& [new_v,set_of_old_v] : mapper)
+            for (auto&& old_v: set_of_old_v)
+                for (auto&& r: p_io.v_to_ec.at(old_v))
+                    new_v_to_ec[new_v].insert(r);
+        result.emplace_back(new_g, new_v_to_ec);
+    }
+    return result;
+}
+
+/** Restore the previously removed purely-system vertices into the graph. */
+P
+enhance_with_sys(const P& atm_p_io, const P& atm_sys_p)
+{
+    auto new_g = atm_p_io.graph;
+    auto new_v_to_ec = atm_p_io.v_to_ec;
+
+    auto last = 0u;
+    for (const auto& v : new_g.get_vertices())
+        last = max(last, v);
+
+    for (const auto& [v,ec] : atm_sys_p.v_to_ec)
+        if (all_of(ec.begin(), ec.end(), is_sys_reg_name))
+        {
+            // create a new vertex in new_g, update new_v_to_ec, add edges
+            auto new_v = ++last;
+            new_g.add_vertex(new_v);
+            new_v_to_ec.insert({new_v, ec});
+            for (const auto& c : atm_sys_p.graph.get_children(v))
+            {
+                auto new_c = get_vertex_of(*atm_sys_p.v_to_ec.at(c).begin(), new_v_to_ec);  // (any register from the EC will do)
+                new_g.add_dir_edge(new_v, new_c);
+            }
+            for (const auto& p : atm_sys_p.graph.get_parents(v))
+            {
+                auto new_p = get_vertex_of(*atm_sys_p.v_to_ec.at(p).begin(), new_v_to_ec);
+                new_g.add_dir_edge(new_p, new_v);
+            }
+            for (const auto& d : atm_sys_p.graph.get_distinct(v))
+            {
+                auto new_d = get_vertex_of(*atm_sys_p.v_to_ec.at(d).begin(), new_v_to_ec);
+                new_g.add_neq_edge(new_d, new_v);
+            }
+        }
+    // note: this function does not introduce loops, provided atm_sys_p has no loops
+    return {new_g, new_v_to_ec};
+}
+
+bool is_total(const P& p)
+{
+    return GA::all_topo_sorts(p.graph).size() == 1;
+}
+
+vector<P>
+MixedDomain::all_possible_atm_tst(const P& atm_sys_p,
+                                  const hset<formula>& atm_tst_atoms)
+{
+    auto p = extract_atm_p(atm_sys_p);
+    MASSERT(is_total(p), "must be total");   // (remove if slows down)
+    auto p_io = add_io_info(p, atm_tst_atoms);
+    if (!p_io.has_value())
+        return {};
+
+    vector<P> result;
+    for (const auto& p_io2 : compute_all_p_io(p_io.value()))
+        result.push_back(enhance_with_sys(p_io2, atm_sys_p));
+
+    return result;
+}
+
+enum InpPred {IN_le, IN_gr, IN_eq, IN_neq};  // IN<reg; IN>reg; IN=reg; IN≠reg
+
+formula inp_pred_to_formula(const InpPred& inp_pred, const string& reg)
+{
+    switch (inp_pred)
+    {
+        case IN_eq:  // IN=reg
+            return formula::ap(IN+"="+reg);
+
+        case IN_gr:  // IN>reg
+            return formula::ap(IN+">"+reg);
+
+        case IN_le:  // IN<reg
+            return formula::ap(IN+"<"+reg);
+
+        case IN_neq: // IN≠reg
+            return formula::ap(IN+"≠"+reg);
+
+        default:
+            MASSERT(0, "");
+    }
+}
+
+/// O(n^2) worst case
+optional<P> refine_if_possible(const P& p,
+                               const InpPred& inp_pred,
+                               const string& reg)
+{
+    auto v_IN = get_vertex_of(IN, p.v_to_ec);
+    auto v_reg = get_vertex_of(reg, p.v_to_ec);
+
+    auto reg_reaches_IN = GA::walk_descendants(p.graph, v_reg, [&v_IN] (const V& v) { return v == v_IN; });
+    auto IN_reaches_reg = GA::walk_ancestors(p.graph, v_reg, [&v_IN] (const V& v) { return v == v_IN; });
+
+    switch (inp_pred)
+    {
+        case IN_eq:  // IN=reg
+        {
+            if (v_IN == v_reg)
+                return p;
+
+            if (reg_reaches_IN ||
+                IN_reaches_reg ||
+                p.graph.get_distinct(v_reg).count(v_IN))
+                return {};
+
+            auto new_v_to_ec = p.v_to_ec;
+            auto new_g = p.graph;
+
+            GA::merge_v1_into_v2(new_g, v_IN, v_reg);
+            new_v_to_ec.at(v_reg).insert(new_v_to_ec.at(v_IN).begin(), new_v_to_ec.at(v_IN).end());
+            new_v_to_ec.erase(v_IN);
+
+            return P(new_g, new_v_to_ec);
+        }
+        case IN_gr:  // IN>reg
+        {
+            if (v_IN == v_reg || reg_reaches_IN)
+                return {};
+            auto new_g = p.graph;
+            new_g.add_dir_edge(v_IN, v_reg);
+            return P(new_g, p.v_to_ec);
+        }
+        case IN_le:  // IN<reg
+        {
+            if (v_reg == v_IN || IN_reaches_reg)
+                return {};
+            auto new_g = p.graph;
+            new_g.add_dir_edge(v_reg, v_IN);
+            return P(new_g, p.v_to_ec);
+        }
+        case IN_neq: // IN≠reg
+        {
+            if (v_IN == v_reg)
+                return {};
+            auto new_g = p.graph;
+            new_g.add_neq_edge(v_IN, v_reg);
+            return P(new_g, p.v_to_ec);
+        }
+        default:
+            MASSERT(0, "");
+    }
+}
+
+vector<pair<P, formula>>
+MixedDomain::all_possible_sys_tst(const P& p_io,
+                                  const hmap<string, Relation>& sys_tst_descr)
+{
+    /// Complexity: quite high: O(n^2n)
+    auto result = vector<pair<P,formula>>();
+    auto descr_list = vector(sys_tst_descr.begin(), sys_tst_descr.end());  // fix some order
+
+    // a recursive function helper
+    function<void(uint, const P&, vector<formula>&)>
+    rec = [&result, &descr_list, &rec]
+    (uint cur_idx, const P& p, vector<formula>& cur_sys_tst)
+    {
+        /// Without the recursive call, this function is n^2.
+        /// The recursion depth is n.
+        /// Hence O(n^2n). (Can probably be reduced to O(n^n), maybe even to O(const^n)?)
+        if (cur_idx == descr_list.size())
+        {
+            result.emplace_back(p, formula::And(cur_sys_tst));
+            return;
+        }
+
+        const auto& [s,rel] = descr_list.at(cur_idx);
+
+        vector<InpPred> all_inp_pred;
+        if      (rel == Relation::less)  all_inp_pred = {IN_le, IN_gr, IN_eq};
+        else if (rel == Relation::equal) all_inp_pred = {IN_eq, IN_neq};
+        else MASSERT(0, "");
+
+        for (const auto& inp_pred : all_inp_pred)
+        {
+            auto refined_p = refine_if_possible(p, inp_pred, s);  // O(n^2)
+            if (!refined_p.has_value())
+                continue;
+            cur_sys_tst.push_back(inp_pred_to_formula(inp_pred, s));
+            rec(cur_idx + 1, refined_p.value(), cur_sys_tst);
+            cur_sys_tst.pop_back();
+        }
+    };
+
+    auto cur_sys_tst = vector<formula>();
+    rec(0, p_io, cur_sys_tst);
+    return result;
 }
 
 void MixedDomain::update(P& p, const Asgn& asgn)
@@ -163,7 +412,7 @@ bool MixedDomain::out_is_implementable(const P& partition)
     return true;
 }
 
-std::set<spot::formula> MixedDomain::construct_sysTstAP(const string_hset& sysR)
+set<formula> MixedDomain::construct_sysTstAP(const string_hset& sysR)
 {
     return {};
 }

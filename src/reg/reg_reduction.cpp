@@ -298,7 +298,7 @@ sdf::reduce(DataDomainInterface& domain,
 
                 auto p = Partition(qp.second.p);  // (a modifiable copy)
 
-                for (const auto& [p_io, atm_full_tst] : domain.all_possible_atm_tst(p,atm_tst_atoms))
+                for (const auto& p_io : domain.all_possible_atm_tst(p,atm_tst_atoms))
                 {
                     for (auto& [p_sys, sys_tst] : domain.all_possible_sys_tst(p_io, sys_tst_descr)) // p_sys is a refinement of p_io wrt. sys_tst (2nd step hidden: only allowed sys_tst are used)
                     {

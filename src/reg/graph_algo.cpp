@@ -53,13 +53,22 @@ graph::GraphAlgo::merge_v1_into_v2(SpecialGraph& g, const V& v1, const V& v2)
 bool graph::GraphAlgo::has_dir_cycles(const SpecialGraph& g)
 {
     // this simple will do: (O(V^3) and maybe even O(V^2)):
-    for (auto v: g.get_vertices())
+    for (const auto& v: g.get_vertices())
     {
         hset<V> v_children;
-        get_descendants(g,v, [&v_children](const V& v){v_children.insert(v);});
+        walk_descendants(g, v, [&v_children](const V& v) { v_children.insert(v); return false; });
         if (v_children.find(v) != v_children.end())
             return true;
     }
+    return false;
+}
+
+bool graph::GraphAlgo::has_neq_self_loops(const SpecialGraph& g)
+{
+    for (const auto& v : g.get_vertices())
+        if (g.get_distinct(v).count(v))
+            return true;
+
     return false;
 }
 
@@ -150,9 +159,9 @@ GraphAlgo::get_reach(const SpecialGraph& g)
     return reach_by_v;
 }
 
-void get_trans_closure_dir(const SpecialGraph& g, const V& vertex,
-                           const function<void(const V&)>& insert,
-                           const function<hset<V>(const V&)>& get_successors)
+bool walk_trans_closure_dir(const SpecialGraph& g, const V& vertex,
+                            const function<bool(const V&)>& stop_after_do,
+                            const function<hset<V>(const V&)>& get_successors)
 {
     // O(V^2) worst case (cliques) (doesn't matter if the hashtable lookup is O(1) or O(V))
     hset<V> visited;
@@ -169,20 +178,25 @@ void get_trans_closure_dir(const SpecialGraph& g, const V& vertex,
             continue;
 
         visited.insert(elem);
-        insert(elem);
+
+        if (stop_after_do(elem))
+            return true;
+
         for (const auto& succ : get_successors(elem))
             queue.push(succ);
     }
+
+    return false;
 }
 
-void GraphAlgo::get_descendants(const SpecialGraph& g, const V& vertex, const function<void(const V&)>& insert)
+bool GraphAlgo::walk_descendants(const SpecialGraph& g, const V& vertex, const function<bool(const V&)>& do_and_stop)
 {
-    get_trans_closure_dir(g, vertex, insert, [&](const V& v) { return g.children.at(v); });
+    return walk_trans_closure_dir(g, vertex, do_and_stop, [&](const V& v) { return g.children.at(v); });
 }
 
-void GraphAlgo::get_ancestors(const SpecialGraph& g, const V& vertex, const function<void(const V&)>& insert)
+bool GraphAlgo::walk_ancestors(const SpecialGraph& g, const V& vertex, const function<bool(const V&)>& do_and_stop)
 {
-    get_trans_closure_dir(g, vertex, insert, [&](const V& v) { return g.parents.at(v); });
+    return walk_trans_closure_dir(g, vertex, do_and_stop, [&](const V& v) { return g.parents.at(v); });
 }
 
 SpecialGraph get_graph(const vector<V>& cur_path)

@@ -19,9 +19,10 @@ namespace sdf
 
 static const std::string TST_CMP_TOKENS[] = {"=","≠","<",">","≤","≥"};  // NOLINT
 
-static const std::string IN = "in";    // NOLINT
+static const std::string  IN = "in";   // NOLINT
 static const std::string OUT = "out";  // NOLINT
-static const std::string RS = "rs";    // NOLINT
+static const std::string  RS = "rs";   // NOLINT
+static const std::string   R = "r";    // NOLINT
 
 /*
  * A test atom has the form:
@@ -51,10 +52,13 @@ bool is_atm_asgn(const std::string& name)
 // ASSUMPTION: one data input and one data output
 // APs naming convention for system tst/asgn/R
 
-inline spot::formula ctor_sys_tst_inp_smaller_r(const std::string& r) { return spot::formula::ap(IN + "<" + r); }
-inline spot::formula ctor_sys_tst_inp_equal_r(const std::string& r)   { return spot::formula::ap(IN + "=" + r); }
+inline spot::formula ctor_tst_inp_smaller_r(const std::string& r) { return spot::formula::ap(IN + "<" + r); }
+inline spot::formula ctor_tst_inp_equal_r(const std::string& r)   { return spot::formula::ap(IN + "=" + r); }
 inline spot::formula ctor_sys_asgn_r(const std::string& r)        { return spot::formula::ap(IN + "↓" + r); }
 inline spot::formula ctor_sys_out_r(const std::string& r)         { return spot::formula::ap("↑" + r); }
+
+inline std::string ctor_atm_reg(uint num) { return R+std::to_string(num); }
+inline std::string ctor_sys_reg(uint num) { return RS+std::to_string(num); }
 
 inline bool is_input_name(const std::string& name)   { return name.length() >= 2 and name.substr(0,2) == IN; }
 inline bool is_output_name(const std::string& name)  { return name.length() >= 3 and name.substr(0,3) == OUT; }
@@ -64,7 +68,7 @@ inline bool is_sys_reg_name(const std::string& name) { return name.length() >= R
 
 /* Extract t1,t2,◇ from  t1◇t2 */
 inline
-std::tuple<std::string,std::string,std::string>
+std::tuple<std::string, std::string, std::string>
 parse_tst(const std::string& action_name)
 {
     MASSERT(is_atm_tst(action_name), action_name);
@@ -84,7 +88,8 @@ parse_tst(const std::string& action_name)
 
 /* Returns pair <variable_name, register> */
 inline
-std::pair<std::string, std::string> parse_asgn_atom(const std::string& asgn_atom)
+std::pair<std::string, std::string>
+parse_asgn_atom(const std::string& asgn_atom)
 {
     // Examples: "in↓r1", "out ↓ r2"
     auto trimmed_action_name = trim_spaces(asgn_atom);
@@ -97,7 +102,8 @@ std::pair<std::string, std::string> parse_asgn_atom(const std::string& asgn_atom
 
 /* string names for system registers */             // TODO: do we really need to expose this?
 inline
-std::unordered_set<std::string> construct_sysR(uint nof_sys_regs)
+std::unordered_set<std::string>
+construct_sysR(uint nof_sys_regs)
 {
     std::unordered_set<std::string> result;
     for (uint i = 1; i<= nof_sys_regs; ++i)
@@ -107,7 +113,8 @@ std::unordered_set<std::string> construct_sysR(uint nof_sys_regs)
 
 /* extract string names of automaton registers */   // TODO: do we really need to expose this?
 inline
-std::unordered_set<std::string> extract_atmR(const spot::twa_graph_ptr& reg_atm)
+std::unordered_set<std::string>
+extract_atmR(const spot::twa_graph_ptr& reg_atm)
 {
     std::unordered_set<std::string> result;
     for (const auto& ap : reg_atm->ap())
