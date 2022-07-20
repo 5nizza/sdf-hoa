@@ -2,11 +2,11 @@
 
 #include <string>
 #include <tuple>
-#include <set>
+#include <unordered_set>
 
 #define BDD spotBDD
-#include <spot/tl/formula.hh>
-#include <spot/twa/twagraph.hh>
+    #include <spot/tl/formula.hh>
+    #include <spot/twa/twagraph.hh>
 #undef BDD
 
 
@@ -24,7 +24,7 @@ const std::string SYNT_MOORE_TKN = "synt-moore";            // NOLINT(cert-err58
  * Note: controllable-AP can also be missing alltogether.
  * @return: aut, inputs, outputs, is_moore
  */
-std::tuple<spot::twa_graph_ptr, std::set<spot::formula>, std::set<spot::formula>, bool>
+std::tuple<spot::twa_graph_ptr, std::unordered_set<spot::formula>, std::unordered_set<spot::formula>, bool>
 read_ehoa(const std::string& hoa_file_name);
 
 } //namespace sdf

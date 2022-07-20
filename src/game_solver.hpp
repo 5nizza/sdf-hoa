@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 
 #define BDD spotBDD
@@ -12,11 +13,12 @@
 #undef BDD
 
 
-extern "C" {
-#include <aiger.h>
-#include <mtr.h>
-#include <cudd.h>
-};
+extern "C"
+{
+    #include <aiger.h>
+    #include <mtr.h>
+    #include <cudd.h>
+}
 
 #include <cuddObj.hh>
 #include "my_assert.hpp"
@@ -31,8 +33,8 @@ class GameSolver
 public:
     /// NOTE: time_limit_sec is used for heuristics (but I won't stop on reaching it)
     GameSolver(bool is_moore_,
-               const std::set<spot::formula>& inputs_,
-               const std::set<spot::formula>& outputs_,
+               const std::unordered_set<spot::formula>& inputs_,
+               const std::unordered_set<spot::formula>& outputs_,
                spot::twa_graph_ptr& aut_,
                uint time_limit_sec_ = 3600) :
         is_moore(is_moore_),

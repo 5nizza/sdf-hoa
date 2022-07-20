@@ -1,6 +1,6 @@
 #pragma once
 
-#include <set>
+#include <unordered_set>
 #include <spdlog/spdlog.h>
 
 #define BDD spotBDD
@@ -41,8 +41,8 @@ int run(const std::string& hoa_file_name,
  */
 bool synthesize_formula(const spot::formula& formula,
                         bool postprocess_atm,
-                        const std::set<spot::formula>& inputs,
-                        const std::set<spot::formula>& outputs,
+                        const std::unordered_set<spot::formula>& inputs,
+                        const std::unordered_set<spot::formula>& outputs,
                         bool is_moore,
                         const std::vector<uint>& k_to_iterate,
                         bool extract_model,
@@ -53,8 +53,8 @@ bool synthesize_formula(const spot::formula& formula,
  * @param extract_model: should extract model into `model`
  */
 bool synthesize_atm(spot::twa_graph_ptr ucw_aut,
-                    const std::set<spot::formula>& inputs,
-                    const std::set<spot::formula>& outputs,
+                    const std::unordered_set<spot::formula>& inputs,
+                    const std::unordered_set<spot::formula>& outputs,
                     bool is_moore,
                     const std::vector<uint>& k_to_iterate,
                     bool extract_model,

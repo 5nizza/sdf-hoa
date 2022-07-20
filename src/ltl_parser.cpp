@@ -1,7 +1,6 @@
 #include "ltl_parser.hpp"
 #include "my_assert.hpp"
 #include "utils.hpp"
-#include <fstream>
 #include <iostream>
 #include <algorithm>
 #include <tuple>
@@ -43,7 +42,7 @@ to_str(int rc, const string& out, const string& err)
 }
 
 
-tuple<spot::formula, set<spot::formula>, set<spot::formula>, bool>
+tuple<spot::formula, unordered_set<spot::formula>, unordered_set<spot::formula>, bool>
 sdf::parse_tlsf(const string& tlsf_file_name)
 {
     int rc;
@@ -73,11 +72,11 @@ sdf::parse_tlsf(const string& tlsf_file_name)
     assert_do_not_intersect(str_inputs, str_outputs);
 
     // separate APs into inputs and outputs
-    set<spot::formula> inputs;
+    unordered_set<spot::formula> inputs;
     for (const auto& s : str_inputs)
         inputs.insert(spot::formula::ap(s));
 
-    set<spot::formula> outputs;
+    unordered_set<spot::formula> outputs;
     for (const auto& s : str_outputs)
         outputs.insert(spot::formula::ap(s));
 
@@ -91,7 +90,7 @@ sdf::parse_tlsf(const string& tlsf_file_name)
                     return false;  // always continue traversing
                 });
         for (const auto& ap : aps)
-            MASSERT(contains(inputs, ap) || contains(outputs, ap), "the formula mentions AP not from inputs nor outputs: " << ap);
+            MASSERT(inputs.count(ap) || outputs.count(ap), "the formula mentions AP not from inputs nor outputs: " << ap);
     }
 
     tie(rc, out, err) = execute("syfco -g " + tlsf_file_name);
@@ -101,8 +100,7 @@ sdf::parse_tlsf(const string& tlsf_file_name)
     MASSERT(out_stripped == "moore" || out_stripped == "mealy", "unknown type string: " + out);
     bool is_moore = (out_stripped == "moore");
 
-    return tuple<spot::formula, set<spot::formula>, set<spot::formula>, bool>
-        (parsed_formula.f, inputs, outputs, is_moore);
+    return {parsed_formula.f, inputs, outputs, is_moore};
 }
 
 

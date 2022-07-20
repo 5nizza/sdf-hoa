@@ -30,6 +30,8 @@ using namespace sdf;
 #define DEBUG(message) {spdlog::get("console")->debug() << message;}  // NOLINT(bugprone-macro-parentheses)
 #define INF(message) {spdlog::get("console")->info() << message;}     // NOLINT(bugprone-macro-parentheses)
 
+#define hset unordered_set
+
 
 int sdf::run(const std::string& hoa_file_name,
              const std::vector<uint>& k_to_iterate,
@@ -90,7 +92,7 @@ int sdf::run(bool check_unreal,
              const std::string& output_file_name)
 {
     spot::formula formula;
-    set<spot::formula> inputs, outputs;
+    hset<spot::formula> inputs, outputs;
     bool is_moore;
     tie(formula, inputs, outputs, is_moore) = parse_tlsf(tlsf_file_name);
 
@@ -142,8 +144,8 @@ int sdf::run(bool check_unreal,
 
 
 bool sdf::synthesize_atm(spot::twa_graph_ptr ucw_aut, // NOLINT(performance-unnecessary-value-param)
-                         const std::set<spot::formula>& inputs,
-                         const std::set<spot::formula>& outputs,
+                         const hset<spot::formula>& inputs,
+                         const hset<spot::formula>& outputs,
                          bool is_moore,
                          const vector<uint>& k_to_iterate,
                          bool extract_model,
@@ -173,8 +175,8 @@ bool sdf::synthesize_atm(spot::twa_graph_ptr ucw_aut, // NOLINT(performance-unne
 
 bool sdf::synthesize_formula(const spot::formula& formula,
                              bool postprocess_atm,
-                             const set<spot::formula>& inputs,
-                             const set<spot::formula>& outputs,
+                             const hset<spot::formula>& inputs,
+                             const hset<spot::formula>& outputs,
                              bool is_moore,
                              const vector<uint>& k_to_iterate,
                              bool extract_model,

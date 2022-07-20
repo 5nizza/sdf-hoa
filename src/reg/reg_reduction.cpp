@@ -1,6 +1,6 @@
 #include "reg_reduction.hpp"
 
-#include "asgn.hpp"
+#include "tst_asgn.hpp"
 #include "ehoa_parser.hpp"
 #include "reg_utils.hpp"
 #include "atm_parsing_naming.hpp"
@@ -71,7 +71,7 @@ void classify_literal(const formula& f,
         APs.insert(f);
 }
 
-/* @return finite-alphabet APs, cmp_atoms, asgn_atoms */
+/** @return finite-alphabet APs, cmp_atoms, asgn_atoms */
 tuple<hset<formula>, hset<formula>, hset<formula>>
 separate(const formula& cube)
 {
@@ -89,9 +89,8 @@ separate(const formula& cube)
     return {APs, cmp_atoms, asgn_atoms};
 }
 
-
 template<typename Container>
-Asgn compute_asgn(const Container& atm_asgn_atoms)
+Asgn to_asgn(const Container& atm_asgn_atoms)
 {
     // Note: the empty assignment (e.g. appears in label "1")
     //       means 'do no assignments' (recall that assignments are treated in a special way)
@@ -104,8 +103,8 @@ Asgn compute_asgn(const Container& atm_asgn_atoms)
     return Asgn(asgn_data);
 }
 
-
-formula asgn_to_formula(const Asgn& sys_asgn, const set<formula>& sysAsgnAtoms)
+formula asgn_to_formula(const Asgn& sys_asgn,
+                        const hset<formula>& sysAsgnAP)
 {
     // find sysAsgnAtom for each r in Asgn.at(i), set it to True, and all others to False
     // note: only i is stored into registers
@@ -118,7 +117,7 @@ formula asgn_to_formula(const Asgn& sys_asgn, const set<formula>& sysAsgnAtoms)
     return formula::And(
             {
                 formula::And(positive_atoms),
-                formula::Not(formula::Or(to_vector(a_minus_b(sysAsgnAtoms, positive_atoms))))  // !(a|b|...) means (!a&!b&...)
+                formula::Not(formula::Or(to_vector(a_minus_b(sysAsgnAP, positive_atoms))))  // !(a|b|...) means (!a&!b&...)
             });
 }
 
@@ -137,7 +136,7 @@ void assert_no_intersection(const hset<string>& set1, const hset<string>& set2)
                 "nonzero intersection: " << join(", ", set1) << " vs " << join(", ", set2));
 }
 
-formula create_MUTEXCL_violation(const set<formula>& props_);
+formula create_MUTEXCL_violation(const hset<formula>& props_);
 
 /* Add an edge labelled `label` into `dst_state` from every state except `dst_state` itself. */
 void add_edge_to_every_state(twa_graph_ptr& atm,
@@ -145,10 +144,10 @@ void add_edge_to_every_state(twa_graph_ptr& atm,
                              const formula& label);
 
 
-pair<set<formula>, set<formula>>
-construct_AsgnOut(const hset<string>& sysR)
+pair<hset<formula>, hset<formula>>
+construct_Asgn_Out_AP(const hset<string>& sysR)
 {
-    set<formula> sysAsgn, sysOutR;
+    hset<formula> sysAsgn, sysOutR;
     for (const auto& r : sysR)
     {
         sysAsgn.insert(ctor_sys_asgn_r(r));
@@ -158,15 +157,122 @@ construct_AsgnOut(const hset<string>& sysR)
     return {sysAsgn, sysOutR};
 }
 
+/**
+ * For every sys reg s in `sys_pred_decr`:
+ *
+ * - If the register has the equality domain,
+ *   then introduce one Boolean proposition "s=IN". The encoding is:
+ *   "*=s":  (s=IN),
+ *   "*≠s": !(s=IN).
+ *
+ * - If the register has the order domain,
+ *   then introduce two Boolean propositions: IN<s and IN=s.
+ *   Then, the atm definition must correctly handle -- ignore -- tests labeled "IN<s & IN=s".
+ *   Then the encoding is:
+ *   "*<s":  (IN<s) & !(IN=s),
+ *   "*>s": !(IN<s) & !(IN=s),
+ *   "*=s": !(IN<s) &  (IN=s).
+ */
+hset<formula>
+construct_sysTstAP(const hmap<string,DomainName>& sys_pred_descr)
+{
+    auto sysTstAP = hset<formula>();
+    for (const auto& [s,dom] : sys_pred_descr)
+    {
+        if (dom == DomainName::equality)
+        {
+            sysTstAP.insert(ctor_tst_inp_equal_r(s));
+        }
+        else if (dom == DomainName::order)
+        {
+            sysTstAP.insert(ctor_tst_inp_equal_r(s));
+            sysTstAP.insert(ctor_tst_inp_smaller_r(s));
+        }
+        else
+            UNREACHABLE();
+    }
+    return sysTstAP;
+}
+
+/** Uses the encoding introduced in `construct_sysTstAP`. */
+formula
+sys_tstAtom_to_formula(const TstAtom& tst_atom,
+                       const DomainName& domain_name)
+{
+    auto s = tst_atom.t1 != IN? tst_atom.t1 : tst_atom.t2;
+    if (domain_name == DomainName::order)
+    {
+        if (tst_atom.relation == TstAtom::equal)
+            // the case "input=s"
+            return formula::And({ctor_tst_inp_equal_r(s),
+                                 formula::Not(ctor_tst_inp_smaller_r(s))});
+        else if (tst_atom.relation == TstAtom::less && tst_atom.t1 == IN)
+            // the case "input<s"
+            return formula::And({ctor_tst_inp_smaller_r(s),
+                                 formula::Not(ctor_tst_inp_equal_r(s))});
+        else if (tst_atom.relation == TstAtom::less && tst_atom.t2 == IN)
+            // the case "input>s"
+            return formula::And({formula::Not(ctor_tst_inp_smaller_r(s)),
+                                 formula::Not(ctor_tst_inp_equal_r(s))});
+        else
+            UNREACHABLE();
+    }
+    else if (domain_name == DomainName::equality)
+    {
+        switch (tst_atom.relation)
+        {
+            case TstAtom::equal: return ctor_tst_inp_equal_r(s);
+            case TstAtom::nequal: return formula::Not(ctor_tst_inp_equal_r(s));
+            default: UNREACHABLE();
+        }
+    }
+    else
+        UNREACHABLE();
+}
+
+formula
+sys_tst_to_formula(const hset<TstAtom>& sys_tst,
+                   const hmap<string,DomainName>& sys_pred_descr)
+{
+    auto conjuncts = vector<formula>();
+    for (const auto& tst_atom : sys_tst)
+        conjuncts.push_back(sys_tstAtom_to_formula(tst_atom,
+                                                   sys_pred_descr.at(tst_atom.t1 != IN? tst_atom.t1 : tst_atom.t2)));
+    return formula::And(conjuncts);  // (note: as expected, returns true if the vector is empty)
+}
+
+hset<TstAtom>
+to_tst_atoms(const hset<formula>& tst_letters)
+{
+    auto result = hset<TstAtom>();
+    for (const auto& tst_let : tst_letters)
+    {
+        auto [t1,t2,cmp] = parse_tst(tst_let.ap_name());
+        MASSERT(! (is_reg_name(t1) && is_reg_name(t2)), "not supported");
+
+        if (cmp == "<")
+            result.emplace(t1, TstAtom::less, t2);
+        else if (cmp == ">")
+            result.emplace(t2, TstAtom::less, t1);  // (swap t1 and t2)
+        else if (cmp == "=")
+            result.emplace(t1, TstAtom::equal, t2);
+        else if (cmp == "≠")
+            result.emplace(t1, TstAtom::nequal, t2);
+        else
+            MASSERT(0, "only <,>,=,≠ is supported internally; the others should be preprocessed");
+            // moreover, ≠ is only supported for the equality domain but not in the order domain
+    }
+    return result;
+}
 
 tuple<twa_graph_ptr,  // new_ucw
-      set<formula>,   // sysTst
-      set<formula>,   // sysAsgn
-      set<formula>>   // sysOutR
+      hset<formula>,  // sysTst
+      hset<formula>,  // sysAsgn
+      hset<formula>>  // sysOutR
 sdf::reduce(DataDomainInterface& domain,
             const twa_graph_ptr& reg_ucw,
             const hset<string>& sysR,
-            const hmap<string,Relation>& sys_tst_descr)
+            const hmap<string,DomainName>& sys_pred_descr)
 {
     // create new_ucw
     twa_graph_ptr new_ucw;
@@ -179,11 +285,11 @@ sdf::reduce(DataDomainInterface& domain,
     assert_no_intersection(sysR, atmR);
 
     // create sysTst, sysAsgn, sysOutR
-    auto sysTst = domain.construct_sysTstAP(sysR);
-    auto [sysAsgn,sysOutR] = construct_AsgnOut(sysR);
+    auto sysTstAP = construct_sysTstAP(sys_pred_descr);
+    auto [sysAsgnAP,sysOutR_AP] = construct_Asgn_Out_AP(sysR);
 
     // introduce APs
-    for (const auto& vars : {sysTst, sysAsgn, sysOutR})
+    for (const auto& vars : {sysTstAP, sysAsgnAP, sysOutR_AP})
         for (const auto& v : vars)
             new_ucw->register_ap(v);
     for (const auto& ap : reg_ucw->ap())
@@ -278,7 +384,6 @@ sdf::reduce(DataDomainInterface& domain,
                             add (q_succ, p_succ) to c_todo
     */
 
-    /// CONTINUE IMPLEMENTING METHODS (of the domain)
     while (!qp_todo.empty())
     {
         DEBUG("qp_todo.size() = " << qp_todo.size() << ", "
@@ -293,14 +398,14 @@ sdf::reduce(DataDomainInterface& domain,
             auto e_f = spot::bdd_to_formula(e.cond, reg_ucw->get_dict());  // e_f is true or a DNF formula
             for (const auto& cube : get_cubes(e_f))                        // iterate over individual edges
             {
-                auto [APs, atm_tst_atoms, atm_asgn_atoms] = separate(cube);
-                auto atm_asgn = compute_asgn(atm_asgn_atoms);
+                auto [APs, atm_tst_letters, atm_asgn_letters] = separate(cube);
+                auto atm_asgn = to_asgn(atm_asgn_letters);
 
                 auto p = Partition(qp.second.p);  // (a modifiable copy)
 
-                for (const auto& p_io : domain.all_possible_atm_tst(p,atm_tst_atoms))
+                for (const auto& p_io : domain.all_possible_atm_tst(p, to_tst_atoms(atm_tst_letters)))
                 {
-                    for (auto& [p_sys, sys_tst] : domain.all_possible_sys_tst(p_io, sys_tst_descr)) // p_sys is a refinement of p_io wrt. sys_tst (2nd step hidden: only allowed sys_tst are used)
+                    for (auto& [p_sys, sys_tst] : domain.all_possible_sys_tst(p_io, sys_pred_descr)) // p_sys is a refinement of p_io wrt. sys_tst
                     {
                         // early break: if o does not belong to the class of i or some sys_reg, then o cannot be realised
 //                    if (!domain.out_is_implementable(p_io)) continue;
@@ -310,9 +415,9 @@ sdf::reduce(DataDomainInterface& domain,
 //                    for (auto&&  reg : sysAsgn)
 //                        all_assignments.push_back({reg});
 //                    for (const auto& sys_asgn_atoms : all_assignments)  // this give 2x speedup _only_
-                        for (const auto& sys_asgn_atoms : all_subsets<formula>(sysAsgn))
+                        for (const auto& sys_asgn_letters : all_subsets<formula>(sysAsgnAP))
                         {
-                            auto sys_asgn = compute_asgn(sys_asgn_atoms);
+                            auto sys_asgn = to_asgn(sys_asgn_letters);
                             domain.update(p_sys, sys_asgn);              // update Rs
                             auto all_r = domain.pick_all_r(p_sys);
                             if (all_r.empty())
@@ -321,11 +426,11 @@ sdf::reduce(DataDomainInterface& domain,
                             domain.update(p_sys, atm_asgn);              // update Ra
                             domain.remove_io_from_p(p_sys);
                             auto p_succ = PartitionCanonical(p_sys);
-                            QP qp_succ = {e.dst, p_succ};
+                            auto qp_succ = QP{e.dst, p_succ};
 
                             /* add the edge (q,p) -> (q_succ, p_succ) labelled (sys_tst & ap(cube), sys_asgn, out_r) */
-                            auto cond = formula::And({asgn_to_formula(sys_asgn, sysAsgn),
-                                                      sys_tst,
+                            auto cond = formula::And({asgn_to_formula(sys_asgn, sysAsgnAP),
+                                                      sys_tst_to_formula(sys_tst, sys_pred_descr),
                                                       R_to_formula(all_r),
                                                       formula::And(vector<formula>(APs.begin(), APs.end()))});
                             new_ucw->new_edge(c_of_qp, get_c(qp_succ),
@@ -351,13 +456,10 @@ sdf::reduce(DataDomainInterface& domain,
     new_ucw->new_acc_edge(rej_sink, rej_sink,
                           spot::formula_to_bdd(formula::tt(), new_ucw->get_dict(), new_ucw));
     // now add the edges
-    add_edge_to_every_state(new_ucw, rej_sink, create_MUTEXCL_violation(sysOutR));
+    add_edge_to_every_state(new_ucw, rej_sink, create_MUTEXCL_violation(sysOutR_AP));
     // NB: when use singleton assignments, ADD mutexcl edges here forbiding storing into ≥2 registers
 
-    return {new_ucw, sysTst, sysAsgn, sysOutR};
-
-    // int i=0, j=0;
-    // DEBUG("#iterations: " << j << ", #breaks: " << i << ", use ratio: " << ((float)(j-i))/j);
+    return {new_ucw, sysTstAP, sysAsgnAP, sysOutR_AP};
 }
 
 /* Add an edge labelled `label` into `dst_state` from every state except `dst_state` itself. */
@@ -375,7 +477,7 @@ void add_edge_to_every_state(twa_graph_ptr& atm,
 
 
 /** return "none are true" OR "≥2 are true" */
-formula create_MUTEXCL_violation(const set<formula>& props_)
+formula create_MUTEXCL_violation(const hset<formula>& props_)
 {
     vector<formula> props(props_.begin(), props_.end());
     vector<formula> big_OR;
@@ -389,9 +491,9 @@ formula create_MUTEXCL_violation(const set<formula>& props_)
 
 void sdf::tmp()
 {
-
-//    cout << p1.equal_to(p2) << endl;
-
+    cout << sys_tst_to_formula({TstAtom("rs", TstAtom::less, IN), TstAtom(IN, TstAtom::equal, "rs2")},
+                               {{"rs", DomainName::order}, {"rs2", DomainName::order}})
+         << endl;
 }
 
 

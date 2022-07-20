@@ -24,7 +24,7 @@ static const std::string OUT = "out";  // NOLINT
 static const std::string  RS = "rs";   // NOLINT
 static const std::string   R = "r";    // NOLINT
 
-/*
+/**
  * A test atom has the form:
  *   atom := in◇rX | out◇rX | in◇out
  * where ◇ is one of =,<,>,≠,≤,≥
@@ -41,7 +41,7 @@ bool is_atm_tst(const std::string& name)
 }
 
 
-/* Assignments have form in↓rX | out↓rX */
+/** Assignments have form in↓rX | out↓rX */
 inline
 bool is_atm_asgn(const std::string& name)
 {
@@ -66,7 +66,7 @@ inline bool is_reg_name(const std::string& name)     { return name.length() >  0
 inline bool is_sys_reg_name(const std::string& name) { return name.length() >= RS.length() and name.substr(0,RS.length()) == RS; }
 
 
-/* Extract t1,t2,◇ from  t1◇t2 */
+/** Extract t1,t2,◇ from  t1◇t2 */
 inline
 std::tuple<std::string, std::string, std::string>
 parse_tst(const std::string& action_name)
@@ -86,7 +86,7 @@ parse_tst(const std::string& action_name)
     return {t1,t2,cmp};
 }
 
-/* Returns pair <variable_name, register> */
+/** Returns pair (variable_name, register) */
 inline
 std::pair<std::string, std::string>
 parse_asgn_atom(const std::string& asgn_atom)
@@ -100,7 +100,7 @@ parse_asgn_atom(const std::string& asgn_atom)
     return {var_name, reg};
 }
 
-/* string names for system registers */             // TODO: do we really need to expose this?
+/** string names for system registers */             // TODO: do we really need to expose this?
 inline
 std::unordered_set<std::string>
 construct_sysR(uint nof_sys_regs)
@@ -111,7 +111,7 @@ construct_sysR(uint nof_sys_regs)
     return result;
 }
 
-/* extract string names of automaton registers */   // TODO: do we really need to expose this?
+/** extract string names of automaton registers */   // TODO: do we really need to expose this?
 inline
 std::unordered_set<std::string>
 extract_atmR(const spot::twa_graph_ptr& reg_atm)

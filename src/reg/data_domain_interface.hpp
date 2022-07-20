@@ -4,7 +4,7 @@
 #include <string>
 #include <unordered_set>
 
-#include "asgn.hpp"
+#include "tst_asgn.hpp"
 #include "reg/types.hpp"
 #include "reg/partition.hpp"
 
@@ -17,7 +17,7 @@
 namespace sdf
 {
 
-enum Relation { less = '<', equal = '=' };
+enum DomainName { order, equality };
 
 class DataDomainInterface
 {
@@ -31,12 +31,12 @@ public:
 
     virtual
     std::vector<P>
-    all_possible_atm_tst(const P& p, const std::unordered_set<spot::formula>& atm_tst_atoms) = 0;
+    all_possible_atm_tst(const P& p, const std::unordered_set<TstAtom>& atm_tst_atoms) = 0;
 
     virtual
-    std::vector<std::pair<P, spot::formula>>
+    std::vector<std::pair<P, std::unordered_set<TstAtom>>>
     all_possible_sys_tst(const P& p_io,
-                         const std::unordered_map<std::string,Relation>& sys_tst_descr) = 0;
+                         const std::unordered_map<std::string,DomainName>& sys_tst_descr) = 0;
 
     virtual
     void
@@ -53,12 +53,6 @@ public:
     virtual
     bool
     out_is_implementable(const P& partition) = 0;
-
-    // ----------------------------------------------------------------------------------------- //
-
-    virtual
-    std::set<spot::formula>
-    construct_sysTstAP(const std::unordered_set<std::string>& sysR) = 0;
 };
 
 

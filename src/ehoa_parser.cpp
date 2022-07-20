@@ -22,7 +22,7 @@ vector<string> get_controllable_APs(const string& hoa_file_name);
 bool get_synt_moore_flag(const string& hoa_file_name);
 
 
-std::tuple<spot::twa_graph_ptr, std::set<spot::formula>, std::set<spot::formula>, bool>
+std::tuple<spot::twa_graph_ptr, std::unordered_set<spot::formula>, std::unordered_set<spot::formula>, bool>
 sdf::read_ehoa(const string& hoa_file_name)
 {
     // the parser assumes that the hoa file contains the additional lines:
@@ -34,7 +34,7 @@ sdf::read_ehoa(const string& hoa_file_name)
     { MASSERT(!pa->aborted, ""); if (stringstream ss; pa->format_errors(ss)) MASSERT(0, ss.str()); }
     auto aut = pa->aut;
 
-    std::set<spot::formula> inputs, outputs;
+    std::unordered_set<spot::formula> inputs, outputs;
     vector<string> controllableAPs = get_controllable_APs(hoa_file_name);
     for (auto& ap : aut->ap())
         if (contains(controllableAPs, ap.ap_name()))

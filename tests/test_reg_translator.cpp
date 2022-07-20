@@ -11,11 +11,6 @@
 #include "reg/atm_parsing_naming.hpp"
 
 
-#define BDD spotBDD
-    #include "spot/tl/formula.hh"
-#undef BDD
-
-
 using namespace sdf;
 using namespace std;
 using namespace graph;
@@ -83,7 +78,7 @@ TEST(MixedDomainTest, all_possible_atm_tst1)
 
     auto r = ctor_atm_reg(1);
     auto p_atm_sys = Partition(SpecialGraph({1}), {{1,{r}}});
-    auto atm_tst_atoms = hset<formula>({formula::ap(IN+"="+OUT)});
+    auto atm_tst_atoms = hset<TstAtom>({TstAtom(IN, TstAtom::equal, OUT)});
     auto domain = MixedDomain();
     ASSERT_EQ(3,
               domain.all_possible_atm_tst(p_atm_sys, atm_tst_atoms).size());
@@ -121,14 +116,14 @@ TEST(MixedDomainTest, all_possible_atm_tst2)
     auto domain = MixedDomain();
 
     ASSERT_EQ(5,
-              domain.all_possible_atm_tst(p_atm_sys, {formula::ap(IN+"="+OUT)}).size());
+              domain.all_possible_atm_tst(p_atm_sys, {TstAtom(IN,TstAtom::equal,OUT)}).size());
 
     /// Now, if we add a system register, nothing should change.
     auto rs = ctor_sys_reg(1);
     p_atm_sys = Partition(SpecialGraph({{1,3},{3,2}},{}),  // (r1->rs->r2)
                           {{1,{r1}},{2,{r2}},{3,{rs}}});
     ASSERT_EQ(5,
-              domain.all_possible_atm_tst(p_atm_sys, {formula::ap(IN+"="+OUT)}).size());
+              domain.all_possible_atm_tst(p_atm_sys, {TstAtom(IN, TstAtom::equal, OUT)}).size());
 }
 
 TEST(MixedDomainTest, all_possible_atm_tst3)
@@ -142,11 +137,11 @@ TEST(MixedDomainTest, all_possible_atm_tst3)
     auto domain = MixedDomain();
     /// If test is IN>r1, OUT<r2, there is only one partition.
     ASSERT_EQ(1,
-              domain.all_possible_atm_tst(p_atm_sys, {formula::ap(IN+">"+r1), formula::ap(OUT+"<"+r2)}).size());
+              domain.all_possible_atm_tst(p_atm_sys, {TstAtom(r1, TstAtom::less, IN), TstAtom(OUT, TstAtom::less, r2)}).size());
 
     /// If test is IN≠r1, OUT=r2, we get 4 options to place IN into r1>(r2=OUT).
     ASSERT_EQ(4,
-              domain.all_possible_atm_tst(p_atm_sys, {formula::ap(IN+"≠"+r1), formula::ap(OUT+"="+r2)}).size());
+              domain.all_possible_atm_tst(p_atm_sys, {TstAtom(IN, TstAtom::nequal, r1), TstAtom(OUT,TstAtom::equal,r2)}).size());
 }
 
 TEST(MixedDomainTest, all_possible_sys_tst1)
@@ -167,11 +162,11 @@ TEST(MixedDomainTest, all_possible_sys_tst1)
 
     /// sys test is =, hence 2 partitions: rs=IN, rs≠IN (plus the rest)
     ASSERT_EQ(2,
-              domain.all_possible_sys_tst(p_io, {{rs, Relation::equal}}).size());
+              domain.all_possible_sys_tst(p_io, {{rs, DomainName::equality}}).size());
 
     /// sys test is <, hence 3 partitions: rs<IN, rs>IN, rs=IN (plus the rest)
     ASSERT_EQ(3,
-              domain.all_possible_sys_tst(p_io, {{rs, Relation::less}}).size());
+              domain.all_possible_sys_tst(p_io, {{rs, DomainName::order}}).size());
 
     /// the results are the same when instead of rs we have rs1=rs2
     /// (no matter if we compare only one or both registers)
@@ -179,12 +174,12 @@ TEST(MixedDomainTest, all_possible_sys_tst1)
     p_io.v_to_ec[3] = {rs1, rs2};
 
     ASSERT_EQ(1, domain.all_possible_sys_tst(p_io, {}).size());
-    ASSERT_EQ(2, domain.all_possible_sys_tst(p_io, {{rs1, Relation::equal}}).size());
-    ASSERT_EQ(3, domain.all_possible_sys_tst(p_io, {{rs1, Relation::less}}).size());
+    ASSERT_EQ(2, domain.all_possible_sys_tst(p_io, {{rs1, DomainName::equality}}).size());
+    ASSERT_EQ(3, domain.all_possible_sys_tst(p_io, {{rs1, DomainName::order}}).size());
     ASSERT_EQ(1, domain.all_possible_sys_tst(p_io, {}).size());
-    ASSERT_EQ(2, domain.all_possible_sys_tst(p_io, {{rs1, Relation::equal}, {rs2, Relation::equal}}).size());
-    ASSERT_EQ(3, domain.all_possible_sys_tst(p_io, {{rs1, Relation::less}, {rs2, Relation::less}}).size());
-    ASSERT_EQ(3, domain.all_possible_sys_tst(p_io, {{rs1, Relation::less}, {rs2, Relation::equal}}).size());
+    ASSERT_EQ(2, domain.all_possible_sys_tst(p_io, {{rs1, DomainName::equality}, {rs2, DomainName::equality}}).size());
+    ASSERT_EQ(3, domain.all_possible_sys_tst(p_io, {{rs1, DomainName::order}, {rs2, DomainName::order}}).size());
+    ASSERT_EQ(3, domain.all_possible_sys_tst(p_io, {{rs1, DomainName::order}, {rs2, DomainName::equality}}).size());
 }
 
 TEST(MixedDomainTest, all_possible_sys_tst2)
@@ -202,11 +197,11 @@ TEST(MixedDomainTest, all_possible_sys_tst2)
     p_io.graph.add_vertex(4);  // (for 'rs2')
 
     ASSERT_EQ(1, domain.all_possible_sys_tst(p_io, {}).size());
-    ASSERT_EQ(2, domain.all_possible_sys_tst(p_io, {{rs1, Relation::equal}}).size());
-    ASSERT_EQ(4, domain.all_possible_sys_tst(p_io, {{rs1, Relation::equal}, {rs2, Relation::equal}}).size());  // (2*2)
-    ASSERT_EQ(3, domain.all_possible_sys_tst(p_io, {{rs1, Relation::less}}).size());
-    ASSERT_EQ(6, domain.all_possible_sys_tst(p_io, {{rs1, Relation::equal}, {rs2, Relation::less}}).size());   // (2*3)
-    ASSERT_EQ(9, domain.all_possible_sys_tst(p_io, {{rs1, Relation::less}, {rs2, Relation::less}}).size());    // (3*3)
+    ASSERT_EQ(2, domain.all_possible_sys_tst(p_io, {{rs1, DomainName::equality}}).size());
+    ASSERT_EQ(4, domain.all_possible_sys_tst(p_io, {{rs1, DomainName::equality}, {rs2, DomainName::equality}}).size());  // (2*2)
+    ASSERT_EQ(3, domain.all_possible_sys_tst(p_io, {{rs1, DomainName::order}}).size());
+    ASSERT_EQ(6, domain.all_possible_sys_tst(p_io, {{rs1, DomainName::equality}, {rs2, DomainName::order}}).size());   // (2*3)
+    ASSERT_EQ(9, domain.all_possible_sys_tst(p_io, {{rs1, DomainName::order}, {rs2, DomainName::order}}).size());    // (3*3)
 }
 
 TEST(MixedDomainTest, all_possible_sys_tst_constraining_sys1)
@@ -223,13 +218,13 @@ TEST(MixedDomainTest, all_possible_sys_tst_constraining_sys1)
     p_io.graph.add_vertex(4);  // for rs2
 
     /// rs1 does not affect the result
-    ASSERT_EQ(3, domain.all_possible_sys_tst(p_io, {{rs1, Relation::less}, {rs2, Relation::less}}).size());
+    ASSERT_EQ(3, domain.all_possible_sys_tst(p_io, {{rs1, DomainName::order}, {rs2, DomainName::order}}).size());
 
     /// make rs2=IN impossible
     p_io.graph.add_neq_edge(3,4);
-    ASSERT_EQ(2, domain.all_possible_sys_tst(p_io, {{rs1, Relation::less}, {rs2, Relation::less}}).size());
+    ASSERT_EQ(2, domain.all_possible_sys_tst(p_io, {{rs1, DomainName::order}, {rs2, DomainName::order}}).size());
     p_io.graph.add_dir_edge(3,4);
-    ASSERT_EQ(1, domain.all_possible_sys_tst(p_io, {{rs1, Relation::less}, {rs2, Relation::less}}).size());
+    ASSERT_EQ(1, domain.all_possible_sys_tst(p_io, {{rs1, DomainName::order}, {rs2, DomainName::order}}).size());
 }
 
 TEST(MixedDomainTest, all_possible_sys_tst_constraining_sys2)
@@ -244,8 +239,8 @@ TEST(MixedDomainTest, all_possible_sys_tst_constraining_sys2)
                                                             {3, {rs1}},
                                                             {4, {rs2}}});
 
-    ASSERT_EQ(3, domain.all_possible_sys_tst(p_io, {{rs1, Relation::equal}, {rs2, Relation::equal}}).size());
-    ASSERT_EQ(5, domain.all_possible_sys_tst(p_io, {{rs1, Relation::less}, {rs2, Relation::less}}).size());
+    ASSERT_EQ(3, domain.all_possible_sys_tst(p_io, {{rs1, DomainName::equality}, {rs2, DomainName::equality}}).size());
+    ASSERT_EQ(5, domain.all_possible_sys_tst(p_io, {{rs1, DomainName::order}, {rs2, DomainName::order}}).size());
 }
 
 int main(int argc, char** argv)

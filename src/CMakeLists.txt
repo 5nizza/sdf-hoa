@@ -15,6 +15,7 @@ list(APPEND SRC_FILES
 #        "reg/eq_partition.cpp"
         "reg/partition.cpp"
         "reg/mixed_domain.cpp"
+        "reg/tst_asgn.cpp"
         )
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)

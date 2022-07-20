@@ -34,7 +34,7 @@ using namespace sdf;
 
 
 vector<uint> get_hoaIDs_of_outputs(const spot::twa_graph_ptr& atm,
-                                   const set<spot::formula>& outputs);
+                                   const hset<spot::formula>& outputs);
 
 
 int main(int argc, const char *argv[])
@@ -136,14 +136,14 @@ int main(int argc, const char *argv[])
     // and implement the Equality domain later.
 
     spot::twa_graph_ptr classical_ucw;
-    set<spot::formula> sysTst, sysAsgn, sysOutR;
+    hset<spot::formula> sysTstAP, sysAsgnAP, sysOutR_AP;
     auto sysR = construct_sysR(b);
     auto domain = MixedDomain();
-    hmap<string,Relation> sys_tst_descr;
+    hmap<string,DomainName> sys_tst_descr;
     for (const auto& rs : sysR)
-        sys_tst_descr.insert({rs,Relation::equal});  // let's start with = wrt. for all sys registers
+        sys_tst_descr.insert({rs, DomainName::equality});  // let's start with = wrt. for all sys registers
     reg_ucw = domain.preprocess(reg_ucw);
-    tie(classical_ucw, sysTst, sysAsgn, sysOutR) = reduce(domain, reg_ucw, sysR, sys_tst_descr);
+    tie(classical_ucw, sysTstAP, sysAsgnAP, sysOutR_AP) = reduce(domain, reg_ucw, sysR, sys_tst_descr);
     DEBUG("completed");
     DEBUG("unprocessed: nof_states = " << classical_ucw->num_states() << ", nof_edges = " << classical_ucw->num_edges());
 
@@ -185,7 +185,7 @@ int main(int argc, const char *argv[])
                 if (l == "--BODY--")  // inject 'controllable-AP' before
                     fs << CONTROLLABLE_AP_TKN << ": "
                        << join(" ", get_hoaIDs_of_outputs(result_atm,
-                                                          a_union_b(outputs, sysAsgn, sysOutR)))
+                                                          a_union_b(outputs, sysAsgnAP, sysOutR_AP)))
                        << endl;
                 fs << l << endl;
             }
@@ -212,13 +212,13 @@ hmap<int, uint> compute_spotID_to_hoaID(const spot::twa_graph_ptr& atm)
 }
 
 vector<uint> get_hoaIDs_of_outputs(const spot::twa_graph_ptr& atm,
-                                   const set<spot::formula>& outputs)
+                                   const unordered_set<spot::formula>& outputs)
 {
     vector<uint> list_of_hoaIDs;
     for (const auto& spot_hoa : compute_spotID_to_hoaID(atm))
     {
         auto f = atm->get_dict()->bdd_map[spot_hoa.first].f;
-        if (contains(outputs, f))
+        if (outputs.count(f))
             list_of_hoaIDs.push_back(spot_hoa.second);
     }
     return list_of_hoaIDs;
