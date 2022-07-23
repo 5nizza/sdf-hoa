@@ -255,9 +255,7 @@ vector<P>
 MixedDomain::all_possible_atm_tst(const P& atm_sys_p,
                                   const hset<TstAtom>& atm_tst_atoms)
 {
-    cout << atm_sys_p << endl;
     auto p = extract_atm_p(atm_sys_p);
-    cout << p << endl;
     MASSERT(is_total(p), "must be total");   // (remove if slows down)
     auto p_io = add_io_info(p, atm_tst_atoms);
     if (!p_io.has_value())

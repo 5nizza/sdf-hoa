@@ -348,7 +348,6 @@ sdf::reduce(DataDomainInterface& domain,
     auto qp_todo = QPHashSet(0, qp_hasher, qp_equal_to);
 
     auto init_p = domain.build_init_partition(sysR, atmR);
-    cout << "init_p: " << init_p << endl;
     QP init_qp = {reg_ucw->get_init_state_number(), PartitionCanonical(init_p)};
     new_ucw->set_init_state(get_c(init_qp));
     qp_todo.insert(init_qp);
