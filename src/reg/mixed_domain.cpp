@@ -209,29 +209,39 @@ enhance_with_sys(const P& atm_p_io, const P& atm_sys_p)
     for (const auto& v : new_g.get_vertices())
         last = max(last, v);
 
-    for (const auto& [v,ec] : atm_sys_p.v_to_ec)
-        if (all_of(ec.begin(), ec.end(), is_sys_reg_name))
+    auto added_vertices = vector<V>();
+
+    // first, add vertices, update new_v_to_ec
+    for (const auto& [old_v,ec] : atm_sys_p.v_to_ec)
+        if (all_of(ec.begin(), ec.end(), is_sys_reg_name))  // EC is completely system hence was previously removed by `extract_atm_p`
         {
             // create a new vertex in new_g, update new_v_to_ec, add edges
             auto new_v = ++last;
             new_g.add_vertex(new_v);
             new_v_to_ec.insert({new_v, ec});
-            for (const auto& c : atm_sys_p.graph.get_children(v))
-            {
-                auto new_c = get_vertex_of(*atm_sys_p.v_to_ec.at(c).begin(), new_v_to_ec);  // (any register from the EC will do)
-                new_g.add_dir_edge(new_v, new_c);
-            }
-            for (const auto& p : atm_sys_p.graph.get_parents(v))
-            {
-                auto new_p = get_vertex_of(*atm_sys_p.v_to_ec.at(p).begin(), new_v_to_ec);
-                new_g.add_dir_edge(new_p, new_v);
-            }
-            for (const auto& d : atm_sys_p.graph.get_distinct(v))
-            {
-                auto new_d = get_vertex_of(*atm_sys_p.v_to_ec.at(d).begin(), new_v_to_ec);
-                new_g.add_neq_edge(new_d, new_v);
-            }
+            added_vertices.push_back(new_v);
         }
+
+    // now add edges
+    for (const auto& new_v : added_vertices)
+    {
+        auto old_v = get_vertex_of(*new_v_to_ec.at(new_v).begin(), atm_sys_p.v_to_ec);      // (any register from the EC will do)
+        for (const auto& old_c : atm_sys_p.graph.get_children(old_v))
+        {
+            auto new_c = get_vertex_of(*atm_sys_p.v_to_ec.at(old_c).begin(), new_v_to_ec);  // (any register from the EC will do)
+            new_g.add_dir_edge(new_v, new_c);
+        }
+        for (const auto& old_p : atm_sys_p.graph.get_parents(old_v))
+        {
+            auto new_p = get_vertex_of(*atm_sys_p.v_to_ec.at(old_p).begin(), new_v_to_ec);
+            new_g.add_dir_edge(new_p, new_v);
+        }
+        for (const auto& old_d : atm_sys_p.graph.get_distinct(old_v))
+        {
+            auto new_d = get_vertex_of(*atm_sys_p.v_to_ec.at(old_d).begin(), new_v_to_ec);
+            new_g.add_neq_edge(new_d, new_v);
+        }
+    }
     // note: this function does not introduce loops, assuming atm_sys_p has no loops
     return {new_g, new_v_to_ec};
 }
@@ -245,7 +255,9 @@ vector<P>
 MixedDomain::all_possible_atm_tst(const P& atm_sys_p,
                                   const hset<TstAtom>& atm_tst_atoms)
 {
+    cout << atm_sys_p << endl;
     auto p = extract_atm_p(atm_sys_p);
+    cout << p << endl;
     MASSERT(is_total(p), "must be total");   // (remove if slows down)
     auto p_io = add_io_info(p, atm_tst_atoms);
     if (!p_io.has_value())

@@ -405,7 +405,7 @@ sdf::reduce(DataDomainInterface& domain,
 
                 for (const auto& p_io : domain.all_possible_atm_tst(p, to_tst_atoms(atm_tst_letters)))
                 {
-                    for (auto& [p_sys, sys_tst] : domain.all_possible_sys_tst(p_io, sys_pred_descr)) // p_sys is a refinement of p_io wrt. sys_tst
+                    for (const auto& [p_sys, sys_tst] : domain.all_possible_sys_tst(p_io, sys_pred_descr)) // p_sys is a refinement of p_io wrt. sys_tst
                     {
                         // early break: if o does not belong to the class of i or some sys_reg, then o cannot be realised
 //                    if (!domain.out_is_implementable(p_io)) continue;
@@ -417,16 +417,16 @@ sdf::reduce(DataDomainInterface& domain,
 //                    for (const auto& sys_asgn_atoms : all_assignments)  // this give 2x speedup _only_
                         for (const auto& sys_asgn_letters : all_subsets<formula>(sysAsgnAP))
                         {
+                            auto p_succ = p_sys;                         // modifiable copy
                             auto sys_asgn = to_asgn(sys_asgn_letters);
-                            domain.update(p_sys, sys_asgn);              // update Rs
-                            auto all_r = domain.pick_all_r(p_sys);
+                            domain.update(p_succ, sys_asgn);              // update Rs
+                            auto all_r = domain.pick_all_r(p_succ);
                             if (all_r.empty())
                                 continue;  // skip if `o` not in any ECs with system regs in it
 
-                            domain.update(p_sys, atm_asgn);              // update Ra
-                            domain.remove_io_from_p(p_sys);
-                            auto p_succ = PartitionCanonical(p_sys);
-                            auto qp_succ = QP{e.dst, p_succ};
+                            domain.update(p_succ, atm_asgn);              // update Ra
+                            domain.remove_io_from_p(p_succ);
+                            auto qp_succ = QP{e.dst, PartitionCanonical(p_succ)};
 
                             /* add the edge (q,p) -> (q_succ, p_succ) labelled (sys_tst & ap(cube), sys_asgn, out_r) */
                             auto cond = formula::And({asgn_to_formula(sys_asgn, sysAsgnAP),

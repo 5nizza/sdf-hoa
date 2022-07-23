@@ -141,7 +141,7 @@ int main(int argc, const char *argv[])
     auto domain = MixedDomain();
     hmap<string,DomainName> sys_tst_descr;
     for (const auto& rs : sysR)
-        sys_tst_descr.insert({rs, DomainName::equality});  // let's start with = wrt. for all sys registers
+        sys_tst_descr.insert({rs, DomainName::equality});  // let's start with equality domain for all sys registers (while using order domain for the automaton)
     reg_ucw = domain.preprocess(reg_ucw);
     tie(classical_ucw, sysTstAP, sysAsgnAP, sysOutR_AP) = reduce(domain, reg_ucw, sysR, sys_tst_descr);
     DEBUG("completed");

@@ -144,6 +144,23 @@ TEST(MixedDomainTest, all_possible_atm_tst3)
               domain.all_possible_atm_tst(p_atm_sys, {TstAtom(IN, TstAtom::nequal, r1), TstAtom(OUT,TstAtom::equal,r2)}).size());
 }
 
+TEST(MixedDomainTest, all_possible_atm_tst_bug)
+{
+    /// the case of two system registers
+    /// the test is 'true'
+    /// the partition has rs1≠rs2
+
+    auto r = ctor_atm_reg(1),
+            rs1 = ctor_sys_reg(1),
+            rs2 = ctor_sys_reg(2);
+    auto p_atm_sys = Partition(SpecialGraph({1,2,3}), {{1,{r}}, {2, {rs1}}, {3,{rs2}}});
+    p_atm_sys.graph.add_neq_edge(2,3);
+    auto domain = MixedDomain();
+
+    /// assertion: simply should not crash
+    domain.all_possible_atm_tst(p_atm_sys, {});
+}
+
 TEST(MixedDomainTest, all_possible_sys_tst1)
 {
     /// one atm register, one system register, and IN;
