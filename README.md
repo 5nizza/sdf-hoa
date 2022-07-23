@@ -2,9 +2,10 @@
 
 The synthesis tool takes as input a TLSF file
 and outputs `REALIZABLE` or `UNREALIZABLE` (thus, it is a realizability checker).
-The theory behind the tool is described in
-[Schewe and Finkbeiner](https://www.react.uni-saarland.de/publications/atva07.pdf) and
-[Kupferman](http://www.cse.huji.ac.il/~ornak/publications/lics06c.pdf).
+A brief description is available in the SYNTCOMP report
+[https://arxiv.org/pdf/2206.00251.pdf](https://arxiv.org/pdf/2206.00251.pdf),
+the tool re-invents the ideas of Ruediger Ehlers of the [symbolic bounded synthesis](https://ruediger-ehlers.de/papers/fmsd2012.pdf).
+
 
 ## Dependencies
 They should be placed into the folder `third_parties`.

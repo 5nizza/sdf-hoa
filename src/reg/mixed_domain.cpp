@@ -108,15 +108,18 @@ MixedDomain::build_init_partition(const string_hset& sysR,
 
     auto next_v = 0;
     g.add_vertex(next_v);
-    v_to_ec[next_v] = atmR;
-    ++next_v;
+    // v_to_ec[next_v] = atmR;
+    v_to_ec[next_v] = a_union_b(atmR, sysR);
 
-    for (const auto& s : sysR)
-    {
-        g.add_vertex(next_v);
-        v_to_ec[next_v] = {s};
-        ++next_v;
-    }
+    cout << "fix me (for testing I assume ALL registers are equal)" << endl;
+    //++next_v;
+
+    //for (const auto& s : sysR)
+    //{
+    //    g.add_vertex(next_v);
+    //    v_to_ec[next_v] = {s};
+    //    ++next_v;
+    //}
 
     return {g,v_to_ec};
 }
@@ -267,7 +270,6 @@ MixedDomain::all_possible_atm_tst(const P& atm_sys_p,
 
     return result;
 }
-
 
 /// O(n^2) worst case
 optional<P> refine_if_possible(const P& p,
