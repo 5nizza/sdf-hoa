@@ -269,7 +269,7 @@ tuple<twa_graph_ptr,  // new_ucw
       hset<formula>,  // sysTst
       hset<formula>,  // sysAsgn
       hset<formula>>  // sysOutR
-sdf::reduce(DataDomainInterface& domain,
+sdf::reduce(MixedDomain& domain,
             const twa_graph_ptr& reg_ucw,
             const hset<string>& sysR,
             const hmap<string,DomainName>& sys_pred_descr)
@@ -407,13 +407,13 @@ sdf::reduce(DataDomainInterface& domain,
                     for (const auto& [p_sys, sys_tst] : domain.all_possible_sys_tst(p_io, sys_pred_descr)) // p_sys is a refinement of p_io wrt. sys_tst
                     {
                         // early break: if o does not belong to the class of i or some sys_reg, then o cannot be realised
-//                    if (!domain.out_is_implementable(p_io)) continue;
+  //                    if (!domain.out_is_implementable(p_io)) continue;
 
-//                    vector<vector<formula>> all_assignments;  // NB: this requires adding mutexcl edges
-//                    all_assignments.emplace_back();  // empty assignment
-//                    for (auto&&  reg : sysAsgn)
-//                        all_assignments.push_back({reg});
-//                    for (const auto& sys_asgn_atoms : all_assignments)  // this give 2x speedup _only_
+  //                    vector<vector<formula>> all_assignments;  // NB: this requires adding mutexcl edges
+  //                    all_assignments.emplace_back();  // empty assignment
+  //                    for (auto&&  reg : sysAsgn)
+  //                        all_assignments.push_back({reg});
+  //                    for (const auto& sys_asgn_atoms : all_assignments)  // this give 2x speedup _only_
                         for (const auto& sys_asgn_letters : all_subsets<formula>(sysAsgnAP))
                         {
                             auto p_succ = p_sys;                         // modifiable copy

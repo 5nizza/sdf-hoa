@@ -108,18 +108,15 @@ MixedDomain::build_init_partition(const string_hset& sysR,
 
     auto next_v = 0;
     g.add_vertex(next_v);
-    // v_to_ec[next_v] = atmR;
-    v_to_ec[next_v] = a_union_b(atmR, sysR);
+    v_to_ec[next_v] = atmR;
+    ++next_v;
 
-    cout << "fix me (for testing I assume ALL registers are equal)" << endl;
-    //++next_v;
-
-    //for (const auto& s : sysR)
-    //{
-    //    g.add_vertex(next_v);
-    //    v_to_ec[next_v] = {s};
-    //    ++next_v;
-    //}
+    for (const auto& s : sysR)
+    {
+        g.add_vertex(next_v);
+        v_to_ec[next_v] = {s};
+        ++next_v;
+    }
 
     return {g,v_to_ec};
 }
@@ -185,29 +182,12 @@ extract_atm_p(const P& p)
     return {new_g, new_v_to_ec};
 }
 
-vector<P>
-compute_all_p_io(const P& p_io)
+/**
+ * Restore the previously removed purely-system vertices into the graph.
+ * This function does not introduce loops, assuming new_g and atm_sys_p have no loops.
+ */
+void enhance_with_sys(SpecialGraph& new_g, VtoEC& new_v_to_ec, const P& atm_sys_p)
 {
-    vector<P> result;
-    for (const auto& [new_g,mapper] : GA::all_topo_sorts2(p_io.graph))  // Note: since only IN and OUT are loose, and p_io is complete for Ratm, the complexity is O(n^2)
-    {
-        hmap<V,EC> new_v_to_ec;
-        for (auto&& [new_v,set_of_old_v] : mapper)
-            for (auto&& old_v: set_of_old_v)
-                for (auto&& r: p_io.v_to_ec.at(old_v))
-                    new_v_to_ec[new_v].insert(r);
-        result.emplace_back(new_g, new_v_to_ec);
-    }
-    return result;
-}
-
-/** Restore the previously removed purely-system vertices into the graph. */
-P
-enhance_with_sys(const P& atm_p_io, const P& atm_sys_p)
-{
-    auto new_g = atm_p_io.graph;
-    auto new_v_to_ec = atm_p_io.v_to_ec;
-
     auto last = 0u;
     for (const auto& v : new_g.get_vertices())
         last = max(last, v);
@@ -245,8 +225,6 @@ enhance_with_sys(const P& atm_p_io, const P& atm_sys_p)
             new_g.add_neq_edge(new_d, new_v);
         }
     }
-    // note: this function does not introduce loops, assuming atm_sys_p has no loops
-    return {new_g, new_v_to_ec};
 }
 
 bool is_total(const P& p)
@@ -265,8 +243,16 @@ MixedDomain::all_possible_atm_tst(const P& atm_sys_p,
         return {};
 
     vector<P> result;
-    for (const auto& p_io2 : compute_all_p_io(p_io.value()))
-        result.push_back(enhance_with_sys(p_io2, atm_sys_p));
+    for (auto& [new_g, mapper]: GA::all_topo_sorts2(p_io.value().graph))  // Note: since only IN and OUT are loose, and p_io is complete for Ratm, the complexity is O(n^2)
+    {
+        hmap<V, EC> new_v_to_ec;
+        for (auto&& [newV, setOfOldV]: mapper)
+            for (auto&& oldV: setOfOldV)
+                for (auto&& r: p_io.value().v_to_ec.at(oldV))
+                    new_v_to_ec[newV].insert(r);
+        enhance_with_sys(new_g, new_v_to_ec, atm_sys_p);
+        result.emplace_back(new_g, new_v_to_ec);
+    }
 
     return result;
 }

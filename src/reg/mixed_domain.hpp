@@ -1,14 +1,21 @@
-#include "reg/data_domain_interface.hpp"
+#pragma once
+
 #include "reg/partition.hpp"
 #include "reg/types.hpp"
 #include "reg/tst_asgn.hpp"
+
+#define BDD spotBDD
+    #include "spot/twa/twagraph.hh"
+#undef BDD
 
 
 namespace sdf
 {
 
+enum DomainName { order, equality };
 
-class MixedDomain: public DataDomainInterface
+
+class MixedDomain
 {
 public:
     using P = Partition;
@@ -23,21 +30,16 @@ public:
      */
     P
     build_init_partition(const string_hset & sysR,
-                         const string_hset & atmR) override;
+                         const string_hset & atmR);
 
     /**
-     * Given a partition including partial atm tests on input and output,
-     * return all possible completed atm tests.
-     * In reality, this method does not return the tests and instead
-     * returns partitions where values of input/output are fully related with atm registers,
-     * and so they can be extracted from each such partition if needed.
-     * (The input partition must be complete for Ratm, but can be partial for Rsys.)
-     * @param partial_p_io
-     * @return partitions with full information on input/output wrt. atm registers
+     * Enumerates all possible refinements of a given test for a given partition.
+     * @param atm_sys_p : partition complete for atm registers
+     * @param atm_tst_atoms : a (partial) automaton test
      */
     std::vector<P>
     all_possible_atm_tst(const P& atm_sys_p,
-                         const std::unordered_set<TstAtom>& atm_tst_atoms) override;
+                         const std::unordered_set<TstAtom>& atm_tst_atoms);
 
     /**
      * @param p_io: a partition complete for atm registers and tests
@@ -50,11 +52,12 @@ public:
      */
     std::vector<std::pair<P, std::unordered_set<TstAtom>>>
     all_possible_sys_tst(const P& p_io,
-                         const std::unordered_map<std::string,DomainName>& sys_tst_descr) override;
+                         const std::unordered_map<std::string,DomainName>& sys_tst_descr);
+
 
     /** Update a given partial partition by performing the assignment. */
     void
-    update(P& p, const Asgn& asgn) override;
+    update(P& p, const Asgn& asgn);
 
     /**
      * From a given partial partition,
@@ -66,14 +69,14 @@ public:
      *       and do not return such a reg.
      */
     string_hset
-    pick_all_r(const P& p_io) override;
+    pick_all_r(const P& p_io);
 
     /** Remove IN and OUT from p. */
     void
-    remove_io_from_p(P& p) override;
+    remove_io_from_p(P& p);
 
     bool
-    out_is_implementable(const P& partition) override;
+    out_is_implementable(const P& partition);
 
 };
 

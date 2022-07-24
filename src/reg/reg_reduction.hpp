@@ -2,8 +2,7 @@
 
 #include <set>
 #include "spdlog/spdlog.h"
-
-#include "reg/data_domain_interface.hpp"
+#include "reg/mixed_domain.hpp"
 
 
 #define BDD spotBDD
@@ -11,11 +10,6 @@
     #include "spot/tl/formula.hh"
 #undef BDD
 
-
-extern "C"
-{
-    #include "aiger.h"
-}
 
 
 namespace sdf
@@ -30,7 +24,7 @@ std::tuple<spot::twa_graph_ptr,      // new_ucw
            std::unordered_set<spot::formula>,  // sysTst
            std::unordered_set<spot::formula>,  // sysAsgn
            std::unordered_set<spot::formula>>  // sysOutR
-reduce(DataDomainInterface& domain,
+reduce(MixedDomain& domain,
        const spot::twa_graph_ptr& reg_ucw,
        const std::unordered_set<std::string>& sysR,
        const std::unordered_map<std::string,DomainName>& sys_pred_descr);
