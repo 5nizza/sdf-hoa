@@ -23,13 +23,11 @@ private:
 public:
     using P = Partition;
 
-    /**
-     * @param background_domain is the domain in which all registers -- system and automaton -- reside.
-     */
+    /** @param background_domain is the domain in which all registers -- system and automaton -- reside. */
     explicit
     MixedDomain(const DomainName& background_domain): background_domain(background_domain) {}
 
-    /** Convert "≥" into two edges "= or >", note that ≠ stays unchanged. */
+    /** Convert "≥" into two edges "= or >"; ≠ stays unchanged. */
     spot::twa_graph_ptr
     preprocess(const spot::twa_graph_ptr&);
 

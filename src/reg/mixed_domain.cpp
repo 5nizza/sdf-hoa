@@ -385,6 +385,13 @@ vector<pair<P, hset<TstAtom>>>
 MixedDomain::all_possible_sys_tst(const P& p_io,
                                   const hmap<string, DomainName>& reg_descr)
 {
+    // check that when background_domain is equality, reg_descr domains are also equality
+    if (background_domain == DomainName::equality)
+        MASSERT(all_of(reg_descr.begin(), reg_descr.end(),
+                       [](const pair<string,DomainName>& reg_dom)
+                       { return !is_sys_reg_name(reg_dom.first) || reg_dom.second == DomainName::equality;}),
+                "sys regs can't use 'stronger' domain than background_domain");
+
     auto descr_list = vector<tuple<string,string,DomainName>>();
     for (const auto& [s,dom] : reg_descr)
         descr_list.emplace_back(IN, s, dom);

@@ -138,11 +138,11 @@ int main(int argc, const char *argv[])
     spot::twa_graph_ptr classical_ucw;
     hset<spot::formula> sysTstAP, sysAsgnAP, sysOutR_AP;
     auto sysR = construct_sysR(b);
-    auto domain = MixedDomain(DomainName::order);
+    auto domain = MixedDomain(DomainName::equality);
     hmap<string,DomainName> sys_tst_descr;
-    for (const auto& rs : sysR)
-        // sys_tst_descr.insert({rs, DomainName::equality});  // equality domain for all sys registers (while using order domain for the automaton)
-        sys_tst_descr.insert({rs, DomainName::order});  // order domain for all sys registers
+    cout << "I am using 'True' for system and equality for automaton "  << endl;
+//    for (const auto& rs : sysR)
+//        sys_tst_descr.insert({rs, DomainName::equality});  // order domain for all sys registers
     reg_ucw = domain.preprocess(reg_ucw);
     tie(classical_ucw, sysTstAP, sysAsgnAP, sysOutR_AP) = reduce(domain, reg_ucw, sysR, sys_tst_descr);
     DEBUG("completed");
@@ -152,6 +152,10 @@ int main(int argc, const char *argv[])
     classical_ucw->merge_edges();
     classical_ucw->merge_states();
     DEBUG("merged states and edges: nof_states = " << classical_ucw->num_states() << ", nof_edges = " << classical_ucw->num_edges());
+
+    auto names = classical_ucw->get_or_set_named_prop<vector<string>>("state-names");
+    for (const auto& n : *names)
+        cout << n << endl;
 
     // postprocess: ensure BA and SBAcc, and minimize
     spot::postprocessor post;
