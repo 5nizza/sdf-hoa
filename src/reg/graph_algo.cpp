@@ -289,6 +289,8 @@ GraphAlgo::all_topo_sorts2(const SpecialGraph& g)
     vector<hset<V>> cur_path;
     hset<V> cur_path_h;  // optimization
     auto vertices = g.get_vertices();
+
+    // ---------- recursive helper -------------
     function<void()> rec = [&]()
     {
         auto possible_successors = filter<V>(vertices,
@@ -308,6 +310,7 @@ GraphAlgo::all_topo_sorts2(const SpecialGraph& g)
             cur_path.pop_back(); for (const auto& e : succ) cur_path_h.erase(e);
         }
     };
+    // ----------------------------------------
 
     rec();
 

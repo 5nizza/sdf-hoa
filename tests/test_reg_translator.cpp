@@ -70,36 +70,51 @@ TEST(PartitionTest, PartitionCanonicalEqual)
     ASSERT_FALSE(PartitionCanonical(p1) == PartitionCanonical(p2));
 }
 
+#define E MixedDomain(DomainName::equality)
+#define O MixedDomain(DomainName::order)
+
 TEST(MixedDomainTest, all_possible_atm_tst1)
 {
-    /// one register and IN; not related.
+    /// r, IN; not related.
     /// the test is IN=OUT (not related to r).
-    /// should get three options: IO>r, IO=r, r>IO, where IO is IN=OUT
+    /// should get
+    /// (order): 3: IO>r, IO=r, r>IO
+    /// (equal): 2: IO=r, IO≠r,
+    /// where IO is IN=OUT
 
     auto r = ctor_atm_reg(1);
     auto p_atm_sys = Partition(SpecialGraph({1}), {{1,{r}}});
     auto atm_tst_atoms = hset<TstAtom>({TstAtom(IN, TstAtom::equal, OUT)});
-    auto domain = MixedDomain();
     ASSERT_EQ(3,
-              domain.all_possible_atm_tst(p_atm_sys, atm_tst_atoms).size());
+              O.all_possible_atm_tst(p_atm_sys, atm_tst_atoms).size());
+    ASSERT_EQ(2,
+              E.all_possible_atm_tst(p_atm_sys, atm_tst_atoms).size());
 
     /// if the test does not relate IN and OUT we get many options:
-    /// 3 options as before: IO>r, IO=r, r>IO (where IO is IN=OUT)
-    /// plus when IN>OUT: 5
-    /// plus symmetrically when OUT>IN: 5.
-    /// In total: 3+5*2 = 13
+    /// order:
+    ///   3 options as before: IO>r, IO=r, r>IO (where IO is IN=OUT)
+    ///   + 5 when IN>OUT
+    ///   + 5 symmetrically when OUT>IN
+    ///   = 13
+    /// equality:
+    ///   {in,out,r}
+    ///   {in,out}{r}; {in}{out,r};  {in,r}{out}
+    ///   {in}{r}{out}
+    ///   = 5
 
     ASSERT_EQ(13,
-              domain.all_possible_atm_tst(p_atm_sys, {}).size());
+              O.all_possible_atm_tst(p_atm_sys, {}).size());
+    ASSERT_EQ(5,
+              E.all_possible_atm_tst(p_atm_sys, {}).size());
 
     /// Now we add a sys register to the partition.
     /// The results should be as before.
     auto rs = ctor_sys_reg(1);
     p_atm_sys = Partition(SpecialGraph({{1,2}},{}), {{1,{r}}, {2,{rs}}});
     ASSERT_EQ(3,
-              domain.all_possible_atm_tst(p_atm_sys, atm_tst_atoms).size());
+              O.all_possible_atm_tst(p_atm_sys, atm_tst_atoms).size());
     ASSERT_EQ(13,
-              domain.all_possible_atm_tst(p_atm_sys, {}).size());
+              O.all_possible_atm_tst(p_atm_sys, {}).size());
 }
 
 TEST(MixedDomainTest, all_possible_atm_tst2)
@@ -113,7 +128,7 @@ TEST(MixedDomainTest, all_possible_atm_tst2)
     auto p_atm_sys = Partition(SpecialGraph({{1,2}},{}),
                                {{1,{r1}},{2,{r2}}});
 
-    auto domain = MixedDomain();
+    auto domain = MixedDomain(DomainName::order);
 
     ASSERT_EQ(5,
               domain.all_possible_atm_tst(p_atm_sys, {TstAtom(IN,TstAtom::equal,OUT)}).size());
@@ -134,7 +149,7 @@ TEST(MixedDomainTest, all_possible_atm_tst3)
          r2 = ctor_atm_reg(2);
     auto p_atm_sys = Partition(SpecialGraph({{1,2}},{}), {{1,{r1}}, {2,{r2}}});
 
-    auto domain = MixedDomain();
+    auto domain = MixedDomain(DomainName::order);
     /// If test is IN>r1, OUT<r2, there is only one partition.
     ASSERT_EQ(1,
               domain.all_possible_atm_tst(p_atm_sys, {TstAtom(r1, TstAtom::less, IN), TstAtom(OUT, TstAtom::less, r2)}).size());
@@ -148,17 +163,16 @@ TEST(MixedDomainTest, all_possible_atm_tst_bug)
 {
     /// the case of two system registers
     /// the test is 'true'
-    /// the partition has rs1≠rs2
+    /// the partition has distinct r, rs1, rs2
 
     auto r = ctor_atm_reg(1),
-            rs1 = ctor_sys_reg(1),
-            rs2 = ctor_sys_reg(2);
+         rs1 = ctor_sys_reg(1),
+         rs2 = ctor_sys_reg(2);
     auto p_atm_sys = Partition(SpecialGraph({1,2,3}), {{1,{r}}, {2, {rs1}}, {3,{rs2}}});
     p_atm_sys.graph.add_neq_edge(2,3);
-    auto domain = MixedDomain();
 
     /// assertion: simply should not crash
-    domain.all_possible_atm_tst(p_atm_sys, {});
+    O.all_possible_atm_tst(p_atm_sys, {});
 }
 
 TEST(MixedDomainTest, all_possible_sys_tst1)
@@ -167,7 +181,6 @@ TEST(MixedDomainTest, all_possible_sys_tst1)
     /// r>IN, rs
     auto rs = ctor_sys_reg(1);
     auto r = ctor_atm_reg(1);
-    auto domain = MixedDomain();
     auto p_io = Partition(SpecialGraph({{1,2}},{}), {{1,{r}},
                                                      {2,{IN}},
                                                      {3,{rs}}});
@@ -175,28 +188,28 @@ TEST(MixedDomainTest, all_possible_sys_tst1)
 
     /// sys tests is T, hence only one possible partition
     ASSERT_EQ(1,
-              domain.all_possible_sys_tst(p_io, {}).size());
+              O.all_possible_sys_tst(p_io, {}).size());
 
     /// sys test is =, hence 2 partitions: rs=IN, rs≠IN (plus the rest)
     ASSERT_EQ(2,
-              domain.all_possible_sys_tst(p_io, {{rs, DomainName::equality}}).size());
+              O.all_possible_sys_tst(p_io, {{rs, DomainName::equality}}).size());
 
     /// sys test is <, hence 3 partitions: rs<IN, rs>IN, rs=IN (plus the rest)
     ASSERT_EQ(3,
-              domain.all_possible_sys_tst(p_io, {{rs, DomainName::order}}).size());
+              O.all_possible_sys_tst(p_io, {{rs, DomainName::order}}).size());
 
     /// the results are the same when instead of rs we have rs1=rs2
     /// (no matter if we compare only one or both registers)
     auto rs1 = ctor_sys_reg(1), rs2 = ctor_sys_reg(2);
     p_io.v_to_ec[3] = {rs1, rs2};
 
-    ASSERT_EQ(1, domain.all_possible_sys_tst(p_io, {}).size());
-    ASSERT_EQ(2, domain.all_possible_sys_tst(p_io, {{rs1, DomainName::equality}}).size());
-    ASSERT_EQ(3, domain.all_possible_sys_tst(p_io, {{rs1, DomainName::order}}).size());
-    ASSERT_EQ(1, domain.all_possible_sys_tst(p_io, {}).size());
-    ASSERT_EQ(2, domain.all_possible_sys_tst(p_io, {{rs1, DomainName::equality}, {rs2, DomainName::equality}}).size());
-    ASSERT_EQ(3, domain.all_possible_sys_tst(p_io, {{rs1, DomainName::order}, {rs2, DomainName::order}}).size());
-    ASSERT_EQ(3, domain.all_possible_sys_tst(p_io, {{rs1, DomainName::order}, {rs2, DomainName::equality}}).size());
+    ASSERT_EQ(1, O.all_possible_sys_tst(p_io, {}).size());
+    ASSERT_EQ(2, O.all_possible_sys_tst(p_io, {{rs1, DomainName::equality}}).size());
+    ASSERT_EQ(3, O.all_possible_sys_tst(p_io, {{rs1, DomainName::order}}).size());
+    ASSERT_EQ(1, O.all_possible_sys_tst(p_io, {}).size());
+    ASSERT_EQ(2, O.all_possible_sys_tst(p_io, {{rs1, DomainName::equality}, {rs2, DomainName::equality}}).size());
+    ASSERT_EQ(3, O.all_possible_sys_tst(p_io, {{rs1, DomainName::order}, {rs2, DomainName::order}}).size());
+    ASSERT_EQ(3, O.all_possible_sys_tst(p_io, {{rs1, DomainName::order}, {rs2, DomainName::equality}}).size());
 }
 
 TEST(MixedDomainTest, all_possible_sys_tst2)
@@ -205,7 +218,7 @@ TEST(MixedDomainTest, all_possible_sys_tst2)
     /// r>IN, rs1, rs2
     auto rs1 = ctor_sys_reg(1), rs2 = ctor_sys_reg(2);
     auto r = ctor_atm_reg(1);
-    auto domain = MixedDomain();
+    auto domain = MixedDomain(DomainName::order);
     auto p_io = Partition(SpecialGraph({{1, 2}}, {}), {{1, {r}},
                                                        {2, {IN}},
                                                        {3, {rs1}},
@@ -227,7 +240,7 @@ TEST(MixedDomainTest, all_possible_sys_tst_constraining_sys1)
     /// rs1>r>IN, rs2
     auto rs1 = ctor_sys_reg(1), rs2 = ctor_sys_reg(2);
     auto r = ctor_atm_reg(1);
-    auto domain = MixedDomain();
+    auto domain = MixedDomain(DomainName::order);
     auto p_io = Partition(SpecialGraph({{1,2},{2,3}}, {}), {{1, {rs1}},
                                                             {2, {r}},
                                                             {3, {IN}},
@@ -250,7 +263,7 @@ TEST(MixedDomainTest, all_possible_sys_tst_constraining_sys2)
     /// r>IN, rs1>rs2
     auto rs1 = ctor_sys_reg(1), rs2 = ctor_sys_reg(2);
     auto r = ctor_atm_reg(1);
-    auto domain = MixedDomain();
+    auto domain = MixedDomain(DomainName::order);
     auto p_io = Partition(SpecialGraph({{1,2},{3,4}}, {}), {{1, {r}},
                                                             {2, {IN}},
                                                             {3, {rs1}},

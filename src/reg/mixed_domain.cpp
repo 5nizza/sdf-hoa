@@ -63,7 +63,7 @@ MixedDomain::preprocess(const twa_graph_ptr& reg_ucw)  // NOLINT (hide 'make it 
         bdd new_cond = e.cond;
         for (const auto& ap : aps)
         {
-            if (!is_atm_tst(ap.ap_name()))
+            if (!is_tst(ap.ap_name()))
                 continue;
 
             auto [t1,t2,cmp] = parse_tst(ap.ap_name());
@@ -232,23 +232,146 @@ bool is_total(const P& p)
     return GA::all_topo_sorts(p.graph).size() == 1;
 }
 
+/// O(n^2) worst case
+optional<P> refine_if_possible(const P& p,
+                               const TstAtom& tst_atom)
+{
+    auto v1 = get_vertex_of(tst_atom.t1, p.v_to_ec);
+    auto v2 = get_vertex_of(tst_atom.t2, p.v_to_ec);
+
+    auto v2_reaches_v1 = GA::walk_descendants(p.graph, v2, [&v1] (const V& v) { return v == v1; });
+    auto v1_reaches_v2 = GA::walk_descendants(p.graph, v1, [&v2] (const V& v) { return v == v2; });
+
+    // tst atom is t1{<,=,≠}t2
+    if (tst_atom.relation == TstAtom::equal)  // t1=t2
+    {
+        if (v1 == v2)
+            return p;
+
+        if (v2_reaches_v1 ||
+            v1_reaches_v2 ||
+            p.graph.get_distinct(v2).count(v1))
+            return {};
+
+        auto new_v_to_ec = p.v_to_ec;
+        auto new_g = p.graph;
+
+        GA::merge_v1_into_v2(new_g, v1, v2);
+        new_v_to_ec.at(v2).insert(new_v_to_ec.at(v1).begin(), new_v_to_ec.at(v1).end());
+        new_v_to_ec.erase(v1);
+
+        return P(new_g, new_v_to_ec);
+    }
+    else if (tst_atom.relation == TstAtom::less)  // t1<t2
+    {
+        if (v2 == v1 || v1_reaches_v2)
+            return {};
+        auto new_g = p.graph;
+        new_g.add_dir_edge(v2, v1);
+        return P(new_g, p.v_to_ec);
+    }
+    else if (tst_atom.relation == TstAtom::nequal)  // t1≠t2
+    {
+        if (v1 == v2)
+            return {};
+        auto new_g = p.graph;
+        new_g.add_neq_edge(v1, v2);
+        return P(new_g, p.v_to_ec);
+    }
+    else
+        UNREACHABLE();
+}
+
+/**
+ * @param descr_list : vector of triples (var,var,domain), were var ∈ {IN,OUT} ∪ Rsys ∪ Ratm (we need indexed access => use vector)
+ *                     Note that every var◇var must be a test expression (e.g., IN<r is OK, IN<OUT is OK, but r1<r2 is not OK).
+ * @param cur_idx
+ * @param p
+ * @param cur_tst
+ * @param result
+ */
+void rec_enumerate(const vector<tuple<string,string,DomainName>>& descr_list,  // NOLINT
+                   const uint& cur_idx,
+                   const P& p,
+                   hset<TstAtom>& cur_tst,
+                   vector<pair<P,hset<TstAtom>>>& result)
+{
+    /// Complexity: high: O(n^2n)
+    /// Without the recursive call, this function is n^2.
+    /// The recursion depth is n.
+    /// Hence O(n^2n). (Can probably be reduced to O(n^n), maybe even to O(const^n)?)
+    if (cur_idx == descr_list.size())
+    {
+        result.emplace_back(p, cur_tst);
+        return;
+    }
+
+    const auto& [v1,v2,dom] = descr_list.at(cur_idx);
+
+    vector<TstAtom> all_tst_atoms;
+    if (dom == DomainName::order)
+        all_tst_atoms = {TstAtom(v1, TstAtom::less,  v2),
+                         TstAtom(v2, TstAtom::less,  v1),
+                         TstAtom(v1, TstAtom::equal, v2)};
+    else if (dom == DomainName::equality)
+        all_tst_atoms = {TstAtom(v1, TstAtom::equal,  v2),
+                         TstAtom(v1, TstAtom::nequal, v2)};
+    else
+        UNREACHABLE();
+
+    for (const auto& tst_atom : all_tst_atoms)
+    {
+        auto refined_p = refine_if_possible(p, tst_atom);  // O(n^2)
+        if (!refined_p.has_value())
+            continue;
+        cur_tst.insert(tst_atom);
+        rec_enumerate(descr_list, cur_idx + 1, refined_p.value(), cur_tst, result);
+        cur_tst.erase(tst_atom);
+    }
+}
+
+vector<pair<P, hset<TstAtom>>>
+MixedDomain::all_possible_atm_tst(const P& atm_sys_p,
+                                  const hset<TstAtom>& atm_tst_atoms)
+{
+    auto p_io = add_io_info(atm_sys_p, atm_tst_atoms);
+    if (!p_io.has_value())
+        return {};
+
+    auto descr_list = vector<tuple<string,string,DomainName>>();
+    descr_list.emplace_back(IN,OUT,background_domain);
+    for (const auto& [v,ec] : atm_sys_p.v_to_ec)  // iterate over Ratm
+        for (const auto& r : ec)
+            if (is_atm_reg_name(r))
+            {
+                descr_list.emplace_back(IN, r, background_domain);
+                descr_list.emplace_back(OUT,r, background_domain);
+            }
+
+    auto result = vector<pair<P,hset<TstAtom>>>();
+    auto cur_atm_tst = hset<TstAtom>();
+    rec_enumerate(descr_list, 0, p_io.value(), cur_atm_tst, result);
+    return result;
+}
+
+/*
 vector<P>
 MixedDomain::all_possible_atm_tst(const P& atm_sys_p,
                                   const hset<TstAtom>& atm_tst_atoms)
 {
     auto p = extract_atm_p(atm_sys_p);
-    MASSERT(is_total(p), "must be total");   // (remove if slows down)
+    MASSERT(is_total(p), "must be total");  // (remove if slows down)
     auto p_io = add_io_info(p, atm_tst_atoms);
     if (!p_io.has_value())
         return {};
 
     vector<P> result;
-    for (auto& [new_g, mapper]: GA::all_topo_sorts2(p_io.value().graph))  // Note: since only IN and OUT are loose, and p_io is complete for Ratm, the complexity is O(n^2)
+    for (auto& [new_g, mapper]: GA::all_topo_sorts2(p_io.value().graph))  // Note: since only IN and OUT are loose, and p_io is complete for Ratm, the complexity 'should be' poly(n), not exp(n)
     {
         hmap<V, EC> new_v_to_ec;
-        for (auto&& [newV, setOfOldV]: mapper)
-            for (auto&& oldV: setOfOldV)
-                for (auto&& r: p_io.value().v_to_ec.at(oldV))
+        for (const auto& [newV, setOfOldV]: mapper)
+            for (const auto& oldV: setOfOldV)
+                for (const auto& r: p_io.value().v_to_ec.at(oldV))
                     new_v_to_ec[newV].insert(r);
         enhance_with_sys(new_g, new_v_to_ec, atm_sys_p);
         result.emplace_back(new_g, new_v_to_ec);
@@ -256,114 +379,20 @@ MixedDomain::all_possible_atm_tst(const P& atm_sys_p,
 
     return result;
 }
-
-/// O(n^2) worst case
-optional<P> refine_if_possible(const P& p,
-                               const TstAtom& inp_sys_tst_atom)
-{
-    auto reg = inp_sys_tst_atom.t1 != IN ? inp_sys_tst_atom.t1 : inp_sys_tst_atom.t2;
-    auto v_IN = get_vertex_of(IN, p.v_to_ec);
-    auto v_reg = get_vertex_of(reg, p.v_to_ec);
-
-    auto reg_reaches_IN = GA::walk_descendants(p.graph, v_reg, [&v_IN] (const V& v) { return v == v_IN; });
-    auto IN_reaches_reg = GA::walk_ancestors(p.graph, v_reg, [&v_IN] (const V& v) { return v == v_IN; });
-
-    // tst atom is t1{<,=,≠}t2
-    if (inp_sys_tst_atom.relation == TstAtom::equal)  // IN=reg
-    {
-        if (v_IN == v_reg)
-            return p;
-
-        if (reg_reaches_IN ||
-            IN_reaches_reg ||
-            p.graph.get_distinct(v_reg).count(v_IN))
-            return {};
-
-        auto new_v_to_ec = p.v_to_ec;
-        auto new_g = p.graph;
-
-        GA::merge_v1_into_v2(new_g, v_IN, v_reg);
-        new_v_to_ec.at(v_reg).insert(new_v_to_ec.at(v_IN).begin(), new_v_to_ec.at(v_IN).end());
-        new_v_to_ec.erase(v_IN);
-
-        return P(new_g, new_v_to_ec);
-    }
-    else if (inp_sys_tst_atom.relation == TstAtom::less && inp_sys_tst_atom.t1 == IN)  // IN<reg
-    {
-        if (v_reg == v_IN || IN_reaches_reg)
-            return {};
-        auto new_g = p.graph;
-        new_g.add_dir_edge(v_reg, v_IN);
-        return P(new_g, p.v_to_ec);
-    }
-    else if (inp_sys_tst_atom.relation == TstAtom::less && inp_sys_tst_atom.t2 == IN)  // reg<IN
-    {
-        if (v_IN == v_reg || reg_reaches_IN)
-            return {};
-        auto new_g = p.graph;
-        new_g.add_dir_edge(v_IN, v_reg);
-        return P(new_g, p.v_to_ec);
-    }
-    else if (inp_sys_tst_atom.relation == TstAtom::nequal)  // IN≠reg
-    {
-        if (v_IN == v_reg)
-            return {};
-        auto new_g = p.graph;
-        new_g.add_neq_edge(v_IN, v_reg);
-        return P(new_g, p.v_to_ec);
-    }
-    else
-        MASSERT(0, "");
-}
+*/
 
 vector<pair<P, hset<TstAtom>>>
 MixedDomain::all_possible_sys_tst(const P& p_io,
-                                  const hmap<string, DomainName>& sys_tst_descr)
+                                  const hmap<string, DomainName>& reg_descr)
 {
-    /// Complexity: high: O(n^2n)
+    auto descr_list = vector<tuple<string,string,DomainName>>();
+    for (const auto& [s,dom] : reg_descr)
+        descr_list.emplace_back(IN, s, dom);
     auto result = vector<pair<P,hset<TstAtom>>>();
-    auto descr_list = vector(sys_tst_descr.begin(), sys_tst_descr.end());  // fix some order
-
-    // ------------------- a recursive function helper -------------------
-    function<void(uint, const P&, hset<TstAtom>&)>
-    rec = [&result, &descr_list, &rec]
-    (uint cur_idx, const P& p, hset<TstAtom>& cur_sys_tst)
-    {
-        /// Without the recursive call, this function is n^2.
-        /// The recursion depth is n.
-        /// Hence O(n^2n). (Can probably be reduced to O(n^n), maybe even to O(const^n)?)
-        if (cur_idx == descr_list.size())
-        {
-            result.emplace_back(p, cur_sys_tst);
-            return;
-        }
-
-        const auto& [s,rel] = descr_list.at(cur_idx);
-
-        vector<TstAtom> all_tst_atoms;
-        if (rel == DomainName::order)
-            all_tst_atoms = {TstAtom(s, TstAtom::less, IN),
-                             TstAtom(IN, TstAtom::less, s),
-                             TstAtom(IN, TstAtom::equal, s)};
-        else if (rel == DomainName::equality)
-            all_tst_atoms = {TstAtom(s, TstAtom::equal, IN),
-                             TstAtom(s, TstAtom::nequal, IN)};
-        else UNREACHABLE();
-
-        for (const auto& tst_atom : all_tst_atoms)
-        {
-            auto refined_p = refine_if_possible(p, tst_atom);  // O(n^2)
-            if (!refined_p.has_value())
-                continue;
-            cur_sys_tst.insert(tst_atom);
-            rec(cur_idx + 1, refined_p.value(), cur_sys_tst);
-            cur_sys_tst.erase(tst_atom);
-        }
-    };
-    // -------------------------------------------------------------------
-
     auto cur_sys_tst = hset<TstAtom>();
-    rec(0, p_io, cur_sys_tst);
+
+    rec_enumerate(descr_list, 0, p_io, cur_sys_tst, result);
+
     return result;
 }
 

@@ -30,13 +30,11 @@ static const std::string   R = "r";    // NOLINT
  * where ◇ is one of =,<,>,≠,≤,≥
  */
 inline
-bool is_atm_tst(const std::string& name)
+bool is_tst(const std::string& ap_name)
 {
     for (const auto& tok : TST_CMP_TOKENS)  // NOLINT
-        // we have to use `find` because some of the tokens consist of multiple chars
-        if (name.find(tok) != std::string::npos)
+        if (ap_name.find(tok) != std::string::npos)  // we have to use `find` because some of the tokens consist of multiple chars
             return true;
-
     return false;
 }
 
@@ -64,6 +62,7 @@ inline bool is_input_name(const std::string& name)   { return name.length() >= 2
 inline bool is_output_name(const std::string& name)  { return name.length() >= 3 and name.substr(0,3) == OUT; }
 inline bool is_reg_name(const std::string& name)     { return name.length() >  0 and name[0] == 'r'; }
 inline bool is_sys_reg_name(const std::string& name) { return name.length() >= RS.length() and name.substr(0,RS.length()) == RS; }
+inline bool is_atm_reg_name(const std::string& name) { return is_reg_name(name) && !is_sys_reg_name(name); }
 
 
 /** Extract t1,t2,◇ from  t1◇t2 */
@@ -71,7 +70,7 @@ inline
 std::tuple<std::string, std::string, std::string>
 parse_tst(const std::string& action_name)
 {
-    MASSERT(is_atm_tst(action_name), action_name);
+    MASSERT(is_tst(action_name), action_name);
 
     uint index_cmp = 0;
     size_t pos_cmp;
@@ -121,10 +120,10 @@ extract_atmR(const spot::twa_graph_ptr& reg_atm)
     {
         const auto& ap_name = ap.ap_name();
 
-        if (!is_atm_tst(ap_name) and !is_atm_asgn(ap_name))
+        if (!is_tst(ap_name) and !is_atm_asgn(ap_name))
             continue;
 
-        if (is_atm_tst(ap_name))
+        if (is_tst(ap_name))
         {
             auto [t1,t2,_] = parse_tst(ap_name);
             if (is_reg_name(t1))

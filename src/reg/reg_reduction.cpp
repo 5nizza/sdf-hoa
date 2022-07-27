@@ -57,13 +57,13 @@ void classify_literal(const formula& f,
     if (f.is(spot::op::Not))
     {
         auto a_name = f.get_child_of(spot::op::Not).ap_name();
-        MASSERT(!is_atm_tst(a_name) and !is_atm_asgn(a_name),
+        MASSERT(!is_tst(a_name) and !is_atm_asgn(a_name),
                 "negated actions not allowed (negated APs are OK): " << f);
         APs.insert(f);
         return;
     }
 
-    if (is_atm_tst(f.ap_name()))
+    if (is_tst(f.ap_name()))
         cmp_atoms.insert(f);
     else if (is_atm_asgn(f.ap_name()))
         asgn_atoms.insert(f);
@@ -293,7 +293,7 @@ sdf::reduce(MixedDomain& domain,
         for (const auto& v : vars)
             new_ucw->register_ap(v);
     for (const auto& ap : reg_ucw->ap())
-        if (!is_atm_tst(ap.ap_name()) && !is_atm_asgn(ap.ap_name()))
+        if (!is_tst(ap.ap_name()) && !is_atm_asgn(ap.ap_name()))
             new_ucw->register_ap(ap);
 
     // -- the main part --
@@ -402,9 +402,9 @@ sdf::reduce(MixedDomain& domain,
 
                 auto p = Partition(qp.second.p);  // (a modifiable copy)
 
-                for (const auto& p_io : domain.all_possible_atm_tst(p, to_tst_atoms(atm_tst_letters)))
+                for (const auto& [p_io,atm_tst] : domain.all_possible_atm_tst(p, to_tst_atoms(atm_tst_letters)))
                 {
-                    for (const auto& [p_sys, sys_tst] : domain.all_possible_sys_tst(p_io, sys_pred_descr)) // p_sys is a refinement of p_io wrt. sys_tst
+                    for (const auto& [p_sys, sys_tst] : domain.all_possible_sys_tst(p_io, sys_pred_descr))  // p_sys is a refinement of p_io wrt. sys_tst
                     {
                         // early break: if o does not belong to the class of i or some sys_reg, then o cannot be realised
   //                    if (!domain.out_is_implementable(p_io)) continue;

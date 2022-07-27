@@ -17,8 +17,17 @@ enum DomainName { order, equality };
 
 class MixedDomain
 {
+private:
+    const DomainName background_domain;
+
 public:
     using P = Partition;
+
+    /**
+     * @param background_domain is the domain in which all registers -- system and automaton -- reside.
+     */
+    explicit
+    MixedDomain(const DomainName& background_domain): background_domain(background_domain) {}
 
     /** Convert "≥" into two edges "= or >", note that ≠ stays unchanged. */
     spot::twa_graph_ptr
@@ -36,24 +45,25 @@ public:
      * Enumerates all possible refinements of a given test for a given partition.
      * @param atm_sys_p : partition complete for atm registers
      * @param atm_tst_atoms : a (partial) automaton test
+     * @param reg_descr : mapping atm_register -> DomainName
      */
-    std::vector<P>
+    std::vector<std::pair<P, std::unordered_set<TstAtom>>>
     all_possible_atm_tst(const P& atm_sys_p,
                          const std::unordered_set<TstAtom>& atm_tst_atoms);
 
     /**
      * @param p_io: a partition complete for atm registers and tests
-     * @param sys_tst_descr: mapping sys_reg_name -> domain name (> or =).
-     *                       Absent registers mean no info about it.
+     * @param reg_descr: mapping sys_reg_name -> domain name (> or =).
+     *                   Absent registers mean no info about it.
      * @return pairs (partition, sys_tst),
      *         where partition corresponds to the refinement of p_io wrt. sys_tst,
      *         and each sys_tst is allowed by tst_desc
      * Complexity: exponential (unavoidable).
+     * TODO: check that reg_descr does not use the domain stronger than the background domain
      */
     std::vector<std::pair<P, std::unordered_set<TstAtom>>>
     all_possible_sys_tst(const P& p_io,
-                         const std::unordered_map<std::string,DomainName>& sys_tst_descr);
-
+                         const std::unordered_map<std::string,DomainName>& reg_descr);
 
     /** Update a given partial partition by performing the assignment. */
     void

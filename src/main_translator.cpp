@@ -138,11 +138,11 @@ int main(int argc, const char *argv[])
     spot::twa_graph_ptr classical_ucw;
     hset<spot::formula> sysTstAP, sysAsgnAP, sysOutR_AP;
     auto sysR = construct_sysR(b);
-    auto domain = MixedDomain();
+    auto domain = MixedDomain(DomainName::order);
     hmap<string,DomainName> sys_tst_descr;
     for (const auto& rs : sysR)
         // sys_tst_descr.insert({rs, DomainName::equality});  // equality domain for all sys registers (while using order domain for the automaton)
-        sys_tst_descr.insert({rs, DomainName::order});  // order domain for all sys registers (while using order domain for the automaton)
+        sys_tst_descr.insert({rs, DomainName::order});  // order domain for all sys registers
     reg_ucw = domain.preprocess(reg_ucw);
     tie(classical_ucw, sysTstAP, sysAsgnAP, sysOutR_AP) = reduce(domain, reg_ucw, sysR, sys_tst_descr);
     DEBUG("completed");
