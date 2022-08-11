@@ -352,36 +352,31 @@ sdf::reduce(MixedDomain& domain,
     new_ucw->set_init_state(get_c(init_qp));
     qp_todo.insert(init_qp);
 
-    // How are pure Equality and Order domains handled by this algorithm?
-    // The following methods depend on the domain type:
-    // `preprocess`
-    // `all_possible_atm_tst`
-    // `all_possible_sys_tst` (?)
-    // The Order domain can be handled within Mixed Domain,
-    // by providing the complete set of system predicates.
-    // However, for the Equality domain, the function `all_possible_atm_tst`
-    // should account for the fact that T (wrt. a single reg) means = or ≠
-    // rather than > < or =. The function `preprocess` should also be changed:
-    // in the Equality, there is no need to translate ≠ into '< or >'.
-
     /*
     while qp_todo is not empty:
         let (q,p) = qp_todo.pop()
         add (q,p) to qp_processed
         for (lab, atm_tst, atm_asgn, q') in reg_ucw.out(q):
-            for (p_io,full_atm_tst) in all_possible_atm_tst(p,atm_tst):        // p_io is a refinement of p_io(=p+atm_tst) wrt. full_atm_tst
-                for (p_io', sys_tst) in all_possible_sys_tst(p_io, sys_pred):  // p_io' is a refinement of p_io wrt. sys_tst (2nd step hidden: only allowed sys_tst are used)
-                    for every sys_asgn:                                        // p_io' is partial since sys_tst is not complete in general
-                        let p_io'' = update(p_io', sys_asgn)      // update Rs
-                        let all_r = pick_all_r(p_io'', sysR)
-                        if all_r is empty: skip
-                        let p_io''' = update(p_io'', atm_asgn)    // update Ra
-                        let p_succ = remove i and o from p_io'''
-                        add to classical_ucw the edge (q,p) -> (q_succ, p_succ) labelled (sys_tst & lab, sys_asgn, OR(all_r))
-                        make p_succ canonical
+            p_io = refine_if_possible(p, atm_tst)                             // if not possible, skip
+            for (p_io',sys_tst) in all_possible_sys_tst(p_io,sys_reg_descr):  // p_io' is a refinement of p_io wrt. sys_tst
+                for every sys_asgn:                                           // 'single-reg' assignments (to handle buffer efficiently, we need this; see Aug'8 notes.)
+                    let p_io'' = update(p_io', sys_asgn)                      // update Rs
+                    for out_r in sysR:
+                        let p_io''' = refine_if_possible(p_io'', out_r)       // if not possible, skip
+                        let p_io'''' = update(p_io''', atm_asgn)              // update Ra
+                        let p_succ = remove i and o from p_io''''
+                        add to classical_ucw the edge (q,p) -> (q_succ, p_succ)
+                                                      labelled (sys_tst & lab, sys_asgn, r)
+                        make p_succ canonical                                 // to make checking "in qp_processed?" cheap: see explanation below
                         if (q_succ, p_succ) not in qp_processed:
                             add (q_succ, p_succ) to c_todo
     */
+
+    // TODOs:
+    // implement:
+    //   refine_if_possible(p, atm_tst)
+    //   refine_if_possible(p_io, out_r)
+    //   ensure single-reg assignment (that is a vital optimisation yet doesn't affect correctness)
 
     while (!qp_todo.empty())
     {
@@ -401,6 +396,8 @@ sdf::reduce(MixedDomain& domain,
                 auto atm_asgn = to_asgn(atm_asgn_letters);
 
                 auto p = Partition(qp.second.p);  // (a modifiable copy)
+
+                /// CURRENT
 
                 for (const auto& [p_io,atm_tst] : domain.all_possible_atm_tst(p, to_tst_atoms(atm_tst_letters)))
                 {

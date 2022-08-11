@@ -77,16 +77,13 @@ public:
      *       and do not return such a reg.
      */
     string_hset
-    pick_all_r(const P& p_io);
+    pick_all_r(const P& p_io);  // CURRENT: I don't understand why is this correct: e.g., for buffer example?
 
     /** Remove IN and OUT from p. */
     void
     remove_io_from_p(P& p);
 
-    bool
-    out_is_implementable(const P& partition);
-
 };
 
 
-} // namespace sdf
+}  // namespace sdf

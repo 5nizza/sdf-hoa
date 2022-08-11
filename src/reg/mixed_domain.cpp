@@ -451,8 +451,3 @@ MixedDomain::pick_all_r(const P& p_io)
     return result;
 }
 
-bool MixedDomain::out_is_implementable(const P& partition)
-{
-    MASSERT(0, "not implemented");
-}
-
