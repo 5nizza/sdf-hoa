@@ -169,7 +169,11 @@ void sdf::GameSolver::build_pre_trans_func()
     {   //debug info
         stringstream ss;
         for (const spot::formula& ap: aut->ap())
-            ss << ap << " (=" << spot_bdd_dict->varnum(ap) << ')';
+        {
+            ss << ap << "(" << spot_bdd_dict->varnum(ap) << ')';
+            if (ap != aut->ap().back())
+                ss << ", ";
+        }
         DEBUG("Atomic propositions explicitly used by the automaton (" << aut->ap().size() << "): " << ss.str());
     }
 
@@ -203,8 +207,8 @@ vector<BDD> sdf::GameSolver::get_substitution()
     vector<BDD> substitution;
 
     for (uint i = 0; i < (uint)cudd.ReadSize(); ++i)
-        if (i >= inputs_outputs.size())  // is state variable
-            substitution.push_back(pre_trans_func.find(i)->second);
+        if (i >= inputs_outputs.size())  // is a state variable
+            substitution.push_back(pre_trans_func.at(i));
         else
             substitution.push_back(cudd.ReadVars(i));
 
@@ -496,25 +500,24 @@ BDD sdf::GameSolver::calc_win_region()
 }
 
 
+/**
+ * Get non-deterministic strategy from the winning region.
+ * If the system outputs controllable values that satisfy this non-deterministic strategy,
+ * then the system wins.
+ * I.e., a non-deterministic strategy describes for each state all possible output values
+ * (below is assuming W excludes error states)
+ *
+ *     strategy(t,u,c) = ∃t' W(t) & T(t,i,c,t') & W(t')
+ *
+ * But since t' <-> bdd(t,i,o), (and since we use error=error(t,u,c)), we use:
+ *
+ *     strategy(t,u,c) = ~error(t,u,c) & W(t) & W(t)[t <- bdd_next_t(t,u,c)]
+ *
+ * @returns: non-deterministic strategy bdd
+ * @note: The strategy is non-deterministic -- determinization is done later.
+ */
 BDD sdf::GameSolver::get_nondet_strategy()
 {
-    /**
-    Get non-deterministic strategy from the winning region.
-    If the system outputs controllable values that satisfy this non-deterministic strategy,
-    then the system wins.
-    I.e., a non-deterministic strategy describes for each state all possible plausible output values
-    (below is assuming W excludes error states)
-
-        strategy(t,u,c) = ∃t' W(t) & T(t,i,c,t') & W(t')
-
-    But since t' <-> bdd(t,i,o), (and since we use error=error(t,u,c)), we use:
-
-        strategy(t,u,c) = ~error(t,u,c) & W(t) & W(t)[t <- bdd_next_t(t,u,c)]
-
-    :return: non-deterministic strategy bdd
-    :note: The strategy is non-deterministic -- determinization is done later.
-    **/
-
     INF("get_nondet_strategy..");
 
     // TODO: which produces smaller circuits?
@@ -556,8 +559,8 @@ hmap<uint,BDD> sdf::GameSolver::extract_output_funcs()
         // Note that we cannot use `c_must_be_true = ~c_can_be_false`,
         // since the negation can cause including tuples (t,i,o) that violate non_det_strategy.
 
-        auto support_indices = cudd.SupportIndices(vector<BDD>({c_must_be_false, c_must_be_true}));
-        for (auto const var_cudd_idx : support_indices)
+        auto support_indices = cudd.SupportIndices({c_must_be_false, c_must_be_true});
+        for (auto var_cudd_idx : support_indices)
         {
             // TODO: try the specific order where for output g_i the input r_i is abstracted last
             // while non relevant variables are abstracted first

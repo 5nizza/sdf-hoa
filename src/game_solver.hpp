@@ -44,7 +44,7 @@ public:
         aut(aut_),
         time_limit_sec(time_limit_sec_)
     {
-        inputs_outputs.insert(inputs_outputs.end(), inputs.begin(), inputs.end());
+        inputs_outputs.insert(inputs_outputs.end(), inputs.begin(), inputs.end());      // NB: inputs, not inputs_
         inputs_outputs.insert(inputs_outputs.end(), outputs.begin(), outputs.end());
     }
 
@@ -65,8 +65,8 @@ private:
 
 private:
     const bool is_moore;
-    const std::vector<spot::formula> inputs;  // I use vector instead of set bcz I need ordered variables
-    const std::vector<spot::formula> outputs; // (ordered)
+    const std::vector<spot::formula> inputs;             // (ordered)
+    const std::vector<spot::formula> outputs;            // (ordered)
     /*const*/ std::vector<spot::formula> inputs_outputs; // (ordered)
     const uint NOF_SIGNALS;
     spot::twa_graph_ptr aut; // TODO: make const
