@@ -59,6 +59,7 @@ const vector<SpecParam> specs =
     SpecParam("mealy_moore_real.tlsf", true),
 
     SpecParam("testing_unknown_APs.tlsf", true),
+    SpecParam("outputs_only.tlsf", true)
 };
 
 class RealCheckFixture : public ::testing::TestWithParam<SpecParam> { };
@@ -102,7 +103,8 @@ const vector<string> specs_for_mc =
     "round_robin_arbiter.tlsf",
 //    "round_robin_arbiter2.tlsf",  // MC takes 4s
     "prioritized_arbiter.tlsf",
-    "mealy_moore_real.tlsf"
+    "mealy_moore_real.tlsf",
+    "outputs_only.tlsf"
 };
 
 class SyntWithMCFixture: public ::testing::TestWithParam<string>

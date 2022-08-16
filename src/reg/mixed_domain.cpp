@@ -101,140 +101,26 @@ P
 MixedDomain::build_init_partition(const string_hset& sysR,
                                   const string_hset& atmR)
 {
-    // init_p: all atm reg are equal, sys regs are unrelated
-
+    // no relations ('true')
     SpecialGraph g;
     VtoEC v_to_ec;
 
     auto next_v = 0;
-    g.add_vertex(next_v);
-    v_to_ec[next_v] = atmR;
-    ++next_v;
-
-    for (const auto& s : sysR)
+    for (const auto& r : a_union_b(sysR, atmR))
     {
         g.add_vertex(next_v);
-        v_to_ec[next_v] = {s};
+        v_to_ec[next_v] = {r};
         ++next_v;
     }
 
     return {g,v_to_ec};
 }
 
-
-optional<P>
-add_io_info(const P& p, const hset<TstAtom>& atm_tst_atoms)
-{
-    // copy
-    auto g = p.graph;
-    auto v_to_ec = p.v_to_ec;
-
-    add_vertex(g, v_to_ec, IN);
-    add_vertex(g, v_to_ec, OUT);
-
-    for (const auto& tst_atom : atm_tst_atoms)
-    {
-        auto v1 = get_vertex_of(tst_atom.t1, v_to_ec),
-             v2 = get_vertex_of(tst_atom.t2, v_to_ec);
-
-        if (tst_atom.relation == TstAtom::equal)
-        {
-            if (v1 == v2)
-                continue;
-
-            GA::merge_v1_into_v2(g, v1, v2);
-            auto v1_ec = v_to_ec.at(v1);
-            v_to_ec.at(v2).insert(v1_ec.begin(), v1_ec.end());
-            v_to_ec.erase(v1);
-        }
-        else if (tst_atom.relation == TstAtom::less)
-            g.add_dir_edge(v2, v1);  // t1<t2
-        else if (tst_atom.relation == TstAtom::nequal)
-            g.add_neq_edge(v1, v2);
-        else
-            UNREACHABLE();
-    }
-
-    if (GA::has_dir_cycles(g) || GA::has_neq_self_loops(g))
-        return {};
-
-    return P(g, v_to_ec);
-}
-
-/** Keep a vertex iff it has an automaton register in its EC;
-    I.e., remove the vertices consisting of purely system registers. */
-P
-extract_atm_p(const P& p)
-{
-    // copy
-    auto new_v_to_ec = p.v_to_ec;
-    auto new_g = p.graph;
-
-    for (const auto& [v,ec] : p.v_to_ec)  // we modify new_v_to_ec => iterate over its const copy
-    {
-        if (all_of(ec.begin(), ec.end(), is_sys_reg_name))
-        {
-            GA::close_vertex(new_g, v);
-            new_v_to_ec.erase(v);
-        }
-    }
-
-    return {new_g, new_v_to_ec};
-}
-
 /**
- * Restore the previously removed purely-system vertices into the graph.
- * This function does not introduce loops, assuming new_g and atm_sys_p have no loops.
+ * O(n^2) worst case
+ * NOTE: modifies p in case of success only; in case of failure, keeps it untouched.
  */
-void enhance_with_sys(SpecialGraph& new_g, VtoEC& new_v_to_ec, const P& atm_sys_p)
-{
-    auto last = 0u;
-    for (const auto& v : new_g.get_vertices())
-        last = max(last, v);
-
-    auto added_vertices = vector<V>();
-
-    // first, add vertices, update new_v_to_ec
-    for (const auto& [old_v,ec] : atm_sys_p.v_to_ec)
-        if (all_of(ec.begin(), ec.end(), is_sys_reg_name))  // EC is completely system hence was previously removed by `extract_atm_p`
-        {
-            // create a new vertex in new_g, update new_v_to_ec, add edges
-            auto new_v = ++last;
-            new_g.add_vertex(new_v);
-            new_v_to_ec.insert({new_v, ec});
-            added_vertices.push_back(new_v);
-        }
-
-    // now add edges
-    for (const auto& new_v : added_vertices)
-    {
-        auto old_v = get_vertex_of(*new_v_to_ec.at(new_v).begin(), atm_sys_p.v_to_ec);      // (any register from the EC will do)
-        for (const auto& old_c : atm_sys_p.graph.get_children(old_v))
-        {
-            auto new_c = get_vertex_of(*atm_sys_p.v_to_ec.at(old_c).begin(), new_v_to_ec);  // (any register from the EC will do)
-            new_g.add_dir_edge(new_v, new_c);
-        }
-        for (const auto& old_p : atm_sys_p.graph.get_parents(old_v))
-        {
-            auto new_p = get_vertex_of(*atm_sys_p.v_to_ec.at(old_p).begin(), new_v_to_ec);
-            new_g.add_dir_edge(new_p, new_v);
-        }
-        for (const auto& old_d : atm_sys_p.graph.get_distinct(old_v))
-        {
-            auto new_d = get_vertex_of(*atm_sys_p.v_to_ec.at(old_d).begin(), new_v_to_ec);
-            new_g.add_neq_edge(new_d, new_v);
-        }
-    }
-}
-
-bool is_total(const P& p)
-{
-    return GA::all_topo_sorts(p.graph).size() == 1;
-}
-
-/// O(n^2) worst case
-optional<P> refine_if_possible(const P& p,
-                               const TstAtom& tst_atom)
+bool refine_if_possible(P& p, const TstAtom& tst_atom)
 {
     auto v1 = get_vertex_of(tst_atom.t1, p.v_to_ec);
     auto v2 = get_vertex_of(tst_atom.t2, p.v_to_ec);
@@ -246,44 +132,48 @@ optional<P> refine_if_possible(const P& p,
     if (tst_atom.relation == TstAtom::equal)  // t1=t2
     {
         if (v1 == v2)
-            return p;
+            return true;
 
         if (v2_reaches_v1 ||
             v1_reaches_v2 ||
             p.graph.get_distinct(v2).count(v1))
-            return {};
+            return false;
 
-        auto new_v_to_ec = p.v_to_ec;
-        auto new_g = p.graph;
+        GA::merge_v1_into_v2(p.graph, v1, v2);
+        p.v_to_ec.at(v2).insert(p.v_to_ec.at(v1).begin(), p.v_to_ec.at(v1).end());
+        p.v_to_ec.erase(v1);
 
-        GA::merge_v1_into_v2(new_g, v1, v2);
-        new_v_to_ec.at(v2).insert(new_v_to_ec.at(v1).begin(), new_v_to_ec.at(v1).end());
-        new_v_to_ec.erase(v1);
-
-        return P(new_g, new_v_to_ec);
+        return true;
     }
     else if (tst_atom.relation == TstAtom::less)  // t1<t2
     {
         if (v2 == v1 || v1_reaches_v2)
-            return {};
-        auto new_g = p.graph;
-        new_g.add_dir_edge(v2, v1);
-        return P(new_g, p.v_to_ec);
+            return false;
+        p.graph.add_dir_edge(v2, v1);
+        return true;
     }
     else if (tst_atom.relation == TstAtom::nequal)  // t1≠t2
     {
         if (v1 == v2)
-            return {};
-        auto new_g = p.graph;
-        new_g.add_neq_edge(v1, v2);
-        return P(new_g, p.v_to_ec);
+            return false;
+        p.graph.add_neq_edge(v1, v2);
+        return true;
     }
     else
         UNREACHABLE();
 }
 
+bool
+MixedDomain::refine(P& p, const hset<TstAtom>& tst_atoms)
+{
+    for (const auto& tst_atom : tst_atoms)
+        if (!refine_if_possible(p, tst_atom))
+            return false;
+    return true;
+}
+
 /**
- * @param descr_list : vector of triples (var,var,domain), were var ∈ {IN,OUT} ∪ Rsys ∪ Ratm (we need indexed access => use vector)
+ * @param descr_list : vector of triples (var,var,domain), were var ∈ {IN,OUT} ∪ Rsys ∪ Ratm (we need ordered access => use vector)
  *                     Note that every var◇var must be a test expression (e.g., IN<r is OK, IN<OUT is OK, but r1<r2 is not OK).
  * @param cur_idx
  * @param p
@@ -321,65 +211,14 @@ void rec_enumerate(const vector<tuple<string,string,DomainName>>& descr_list,  /
 
     for (const auto& tst_atom : all_tst_atoms)
     {
-        auto refined_p = refine_if_possible(p, tst_atom);  // O(n^2)
-        if (!refined_p.has_value())
+        auto refined_p = p;
+        if (!refine_if_possible(refined_p, tst_atom))  // O(n^2)
             continue;
         cur_tst.insert(tst_atom);
-        rec_enumerate(descr_list, cur_idx + 1, refined_p.value(), cur_tst, result);
+        rec_enumerate(descr_list, cur_idx + 1, refined_p, cur_tst, result);
         cur_tst.erase(tst_atom);
     }
 }
-
-vector<pair<P, hset<TstAtom>>>
-MixedDomain::all_possible_atm_tst(const P& atm_sys_p,
-                                  const hset<TstAtom>& atm_tst_atoms)
-{
-    auto p_io = add_io_info(atm_sys_p, atm_tst_atoms);
-    if (!p_io.has_value())
-        return {};
-
-    auto descr_list = vector<tuple<string,string,DomainName>>();
-    descr_list.emplace_back(IN,OUT,background_domain);
-    for (const auto& [v,ec] : atm_sys_p.v_to_ec)  // iterate over Ratm
-        for (const auto& r : ec)
-            if (is_atm_reg_name(r))
-            {
-                descr_list.emplace_back(IN, r, background_domain);
-                descr_list.emplace_back(OUT,r, background_domain);
-            }
-
-    auto result = vector<pair<P,hset<TstAtom>>>();
-    auto cur_atm_tst = hset<TstAtom>();
-    rec_enumerate(descr_list, 0, p_io.value(), cur_atm_tst, result);
-    return result;
-}
-
-/*
-vector<P>
-MixedDomain::all_possible_atm_tst(const P& atm_sys_p,
-                                  const hset<TstAtom>& atm_tst_atoms)
-{
-    auto p = extract_atm_p(atm_sys_p);
-    MASSERT(is_total(p), "must be total");  // (remove if slows down)
-    auto p_io = add_io_info(p, atm_tst_atoms);
-    if (!p_io.has_value())
-        return {};
-
-    vector<P> result;
-    for (auto& [new_g, mapper]: GA::all_topo_sorts2(p_io.value().graph))  // Note: since only IN and OUT are loose, and p_io is complete for Ratm, the complexity 'should be' poly(n), not exp(n)
-    {
-        hmap<V, EC> new_v_to_ec;
-        for (const auto& [newV, setOfOldV]: mapper)
-            for (const auto& oldV: setOfOldV)
-                for (const auto& r: p_io.value().v_to_ec.at(oldV))
-                    new_v_to_ec[newV].insert(r);
-        enhance_with_sys(new_g, new_v_to_ec, atm_sys_p);
-        result.emplace_back(new_g, new_v_to_ec);
-    }
-
-    return result;
-}
-*/
 
 vector<pair<P, hset<TstAtom>>>
 MixedDomain::all_possible_sys_tst(const P& p_io,
@@ -425,6 +264,12 @@ void MixedDomain::update(P& p, const Asgn& asgn)
     }
 }
 
+void MixedDomain::add_io_to_p(P& p)
+{
+    add_vertex(p.graph, p.v_to_ec, IN);
+    add_vertex(p.graph, p.v_to_ec, OUT);
+}
+
 void MixedDomain::remove_io_from_p(P& p)
 {
     for (const auto& var : {IN, OUT})
@@ -437,17 +282,5 @@ void MixedDomain::remove_io_from_p(P& p)
             p.v_to_ec.erase(v);
         }
     }
-}
-
-string_hset
-MixedDomain::pick_all_r(const P& p_io)
-{
-    auto result = hset<string>();
-    auto out_v = get_vertex_of(OUT, p_io.v_to_ec);
-    auto out_ec = p_io.v_to_ec.at(out_v);
-    for (const auto& v : out_ec)
-        if (is_sys_reg_name(v))
-            result.insert(v);
-    return result;
 }
 

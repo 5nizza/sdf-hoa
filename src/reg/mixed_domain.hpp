@@ -27,27 +27,35 @@ public:
     explicit
     MixedDomain(const DomainName& background_domain): background_domain(background_domain) {}
 
-    /** Convert "≥" into two edges "= or >"; ≠ stays unchanged. */
+    /** Convert "≥" into two edges "= or >"; ≠ stays unchanged. */  // TODO: remove this method (don't mention spot here)
     spot::twa_graph_ptr
     preprocess(const spot::twa_graph_ptr&);
 
-    /**
-     * We start from the partition {ri=rj | ri,rj ∈ Ra},
-     * i.e., sys registers are unrelated.
-     */
+    /** We start from the partition 'true' (no relations). */
     P
     build_init_partition(const string_hset & sysR,
                          const string_hset & atmR);
 
     /**
-     * Enumerates all possible refinements of a given test for a given partition.
-     * @param atm_sys_p : partition complete for atm registers
-     * @param atm_tst_atoms : a (partial) automaton test
-     * @param reg_descr : mapping atm_register -> DomainName
+     * Refine a given partition wrt. test atoms.
+     * @returns: true if refinement results in a consistent partition,
+     *           false if not
+     * @note: has side-effects on p
      */
-    std::vector<std::pair<P, std::unordered_set<TstAtom>>>
-    all_possible_atm_tst(const P& atm_sys_p,
-                         const std::unordered_set<TstAtom>& atm_tst_atoms);
+    bool
+    refine(P& p, const std::unordered_set<TstAtom>& tst_atoms);
+
+    /** Update a given partial partition by performing the assignment. */
+    void
+    update(P& p, const Asgn& asgn);
+
+    /** Add IN and OUT vertices to p. */
+    void
+    add_io_to_p(P& p);
+
+    /** Remove IN and OUT vertices from p. */
+    void
+    remove_io_from_p(P& p);
 
     /**
      * @param p_io: a partition complete for atm registers and tests
@@ -62,26 +70,6 @@ public:
     std::vector<std::pair<P, std::unordered_set<TstAtom>>>
     all_possible_sys_tst(const P& p_io,
                          const std::unordered_map<std::string,DomainName>& reg_descr);
-
-    /** Update a given partial partition by performing the assignment. */
-    void
-    update(P& p, const Asgn& asgn);
-
-    /**
-     * From a given partial partition,
-     * compute system registers compatible with OUT.
-     * This method simply returns the system registers that reside in the same EC as OUT.
-     * Such registers for sure have the same value as OUT.
-     * Note: if sys reg and OUT are in different ECs c1 and c2, and c1 c2 are not related,
-     *       we do not know whether c1 and c2 are equal or not,
-     *       and do not return such a reg.
-     */
-    string_hset
-    pick_all_r(const P& p_io);  // CURRENT: I don't understand why is this correct: e.g., for buffer example?
-
-    /** Remove IN and OUT from p. */
-    void
-    remove_io_from_p(P& p);
 
 };
 

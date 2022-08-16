@@ -61,7 +61,7 @@ int main(int argc, const char *argv[])
     args::ValueFlag<string> output_hoa_name
             (parser,
              "o",
-             "file name for the output SHOA automaton",
+             "file name for the output automaton (.shoa or .dot)",
              {'o', "output"});
 
     args::Flag silence_flag

@@ -89,8 +89,7 @@ separate(const formula& cube)
     return {APs, cmp_atoms, asgn_atoms};
 }
 
-template<typename Container>
-Asgn to_asgn(const Container& atm_asgn_atoms)
+Asgn to_asgn(const hset<formula>& atm_asgn_atoms)
 {
     // Note: the empty assignment (e.g. appears in label "1")
     //       means 'do no assignments' (recall that assignments are treated in a special way)
@@ -136,7 +135,7 @@ void assert_no_intersection(const hset<string>& set1, const hset<string>& set2)
                 "nonzero intersection: " << join(", ", set1) << " vs " << join(", ", set2));
 }
 
-formula create_MUTEXCL_violation(const hset<formula>& props_);
+formula create_MUTEXCL_violation(const hset<formula>& props_, bool forbid_empty);
 
 /* Add an edge labelled `label` into `dst_state` from every state except `dst_state` itself. */
 void add_edge_to_every_state(twa_graph_ptr& atm,
@@ -242,12 +241,12 @@ sys_tst_to_formula(const hset<TstAtom>& sys_tst,
 }
 
 hset<TstAtom>
-to_tst_atoms(const hset<formula>& tst_letters)
+to_tst(const hset<formula>& tst_atoms)
 {
     auto result = hset<TstAtom>();
-    for (const auto& tst_let : tst_letters)
+    for (const auto& f : tst_atoms)
     {
-        auto [t1,t2,cmp] = parse_tst(tst_let.ap_name());
+        auto [t1,t2,cmp] = parse_tst(f.ap_name());
         MASSERT(! (is_reg_name(t1) && is_reg_name(t2)), "not supported");
 
         if (cmp == "<")
@@ -286,15 +285,21 @@ sdf::reduce(MixedDomain& domain,
 
     // create sysTst, sysAsgn, sysOutR
     auto sysTstAP = construct_sysTstAP(sys_pred_descr);
-    auto [sysAsgnAP,sysOutR_AP] = construct_Asgn_Out_AP(sysR);
+    auto [sysAsgnAP,sysOutAP] = construct_Asgn_Out_AP(sysR);
 
     // introduce APs
-    for (const auto& vars : {sysTstAP, sysAsgnAP, sysOutR_AP})
+    for (const auto& vars : {sysTstAP, sysAsgnAP, sysOutAP})
         for (const auto& v : vars)
             new_ucw->register_ap(v);
     for (const auto& ap : reg_ucw->ap())
         if (!is_tst(ap.ap_name()) && !is_atm_asgn(ap.ap_name()))
             new_ucw->register_ap(ap);
+
+    // We will use single_reg_assignments
+    vector<Asgn> single_reg_assignments;
+    single_reg_assignments.push_back(to_asgn({}));          // empty assignment
+    for (const auto& regAP : sysAsgnAP)
+        single_reg_assignments.push_back(to_asgn({regAP}));
 
     // -- the main part --
 
@@ -372,12 +377,6 @@ sdf::reduce(MixedDomain& domain,
                             add (q_succ, p_succ) to c_todo
     */
 
-    // TODOs:
-    // implement:
-    //   refine_if_possible(p, atm_tst)
-    //   refine_if_possible(p_io, out_r)
-    //   ensure single-reg assignment (that is a vital optimisation yet doesn't affect correctness)
-
     while (!qp_todo.empty())
     {
         DEBUG("qp_todo.size() = " << qp_todo.size() << ", "
@@ -392,42 +391,36 @@ sdf::reduce(MixedDomain& domain,
             auto e_f = spot::bdd_to_formula(e.cond, reg_ucw->get_dict());  // e_f is true or a DNF formula
             for (const auto& cube : get_cubes(e_f))                        // iterate over individual edges
             {
-                auto [APs, atm_tst_letters, atm_asgn_letters] = separate(cube);
-                auto atm_asgn = to_asgn(atm_asgn_letters);
+                auto [APs, atm_tst_atoms, atm_asgn_atoms] = separate(cube);
+                auto atm_asgn = to_asgn(atm_asgn_atoms);
 
-                auto p = Partition(qp.second.p);  // (a modifiable copy)
+                auto p_io = qp.second.p;
+                domain.add_io_to_p(p_io);
 
-                /// CURRENT
+                if (!domain.refine(p_io, to_tst(atm_tst_atoms)))
+                    continue;
 
-                for (const auto& [p_io,atm_tst] : domain.all_possible_atm_tst(p, to_tst_atoms(atm_tst_letters)))
+                for (const auto& [p_sys, sys_tst] : domain.all_possible_sys_tst(p_io, sys_pred_descr))  // p_sys is a refinement of p_io wrt. sys_tst
                 {
-                    for (const auto& [p_sys, sys_tst] : domain.all_possible_sys_tst(p_io, sys_pred_descr))  // p_sys is a refinement of p_io wrt. sys_tst
+                    for (const auto& sys_asgn : single_reg_assignments)
                     {
-                        // early break: if o does not belong to the class of i or some sys_reg, then o cannot be realised
-  //                    if (!domain.out_is_implementable(p_io)) continue;
+                        auto p_sys_upd = p_sys;
+                        domain.update(p_sys_upd, sys_asgn);              // update Rs
 
-  //                    vector<vector<formula>> all_assignments;  // NB: this requires adding mutexcl edges
-  //                    all_assignments.emplace_back();  // empty assignment
-  //                    for (auto&&  reg : sysAsgn)
-  //                        all_assignments.push_back({reg});
-  //                    for (const auto& sys_asgn_atoms : all_assignments)  // this give 2x speedup _only_
-                        for (const auto& sys_asgn_letters : all_subsets<formula>(sysAsgnAP))
+                        for (const auto& out_r : sysR)
                         {
-                            auto p_succ = p_sys;                         // modifiable copy
-                            auto sys_asgn = to_asgn(sys_asgn_letters);
-                            domain.update(p_succ, sys_asgn);              // update Rs
-                            auto all_r = domain.pick_all_r(p_succ);
-                            if (all_r.empty())
-                                continue;  // skip if `o` not in any ECs with system regs in it
+                            auto p_sys_new = p_sys_upd;
+                            if (!domain.refine(p_sys_new, {TstAtom(OUT, TstAtom::equal, out_r)}))  // skip if out_r does not satisfy the OUT test
+                                continue;
 
-                            domain.update(p_succ, atm_asgn);              // update Ra
-                            domain.remove_io_from_p(p_succ);
-                            auto qp_succ = QP{e.dst, PartitionCanonical(p_succ)};
+                            domain.update(p_sys_new, atm_asgn);          // update Ra
+                            domain.remove_io_from_p(p_sys_new);
+                            auto qp_succ = QP{e.dst, PartitionCanonical(p_sys_new)};
 
                             /* add the edge (q,p) -> (q_succ, p_succ) labelled (sys_tst & ap(cube), sys_asgn, out_r) */
                             auto cond = formula::And({asgn_to_formula(sys_asgn, sysAsgnAP),
                                                       sys_tst_to_formula(sys_tst, sys_pred_descr),
-                                                      R_to_formula(all_r),
+                                                      R_to_formula({out_r}),
                                                       formula::And(vector<formula>(APs.begin(), APs.end()))});
                             new_ucw->new_edge(c_of_qp, get_c(qp_succ),
                                               spot::formula_to_bdd(cond, new_ucw->get_dict(), new_ucw),
@@ -435,27 +428,29 @@ sdf::reduce(MixedDomain& domain,
 
                             if (!qp_processed.count(qp_succ))
                                 qp_todo.insert(qp_succ);
-                        }
-                    }
-                }
-            } // for (cube : get_cubes(e_f))
-        } // for (e : rec_ucw->out(qp.first))
+                        } // enumerate out_r
+                    } // enumerate sys_asgn
+                } // enumerate possible sys_tst
+            } // enumerate simple edges
+        } // enumerate super edges from qp.first
     } // while (!qp_todo.empty())
 
     // To every state,
-    // we add an outgoing edge leading to the rejecting sink when the assumptions on _system_ are violated.
+    // we add an outgoing edge leading to the rejecting sink when the system violates its assumptions.
     // Assumptions on system:
-    // exactly one of ↑r holds (MUTEXCL)
+    // - exactly one of ↑r holds
+    // - at most one of ↓r holds
 
-    // first create a rejecting sink
+    // create a rejecting sink
     auto rej_sink = new_ucw->new_state();
     new_ucw->new_acc_edge(rej_sink, rej_sink,
                           spot::formula_to_bdd(formula::tt(), new_ucw->get_dict(), new_ucw));
-    // now add the edges
-    add_edge_to_every_state(new_ucw, rej_sink, create_MUTEXCL_violation(sysOutR_AP));
-    // NB: when use singleton assignments, ADD mutexcl edges here forbiding storing into ≥2 registers
+    // MUTEXCL for sys output
+    add_edge_to_every_state(new_ucw, rej_sink, create_MUTEXCL_violation(sysOutAP, true));
+    // MUTEXCL for single-register assignment
+    add_edge_to_every_state(new_ucw, rej_sink, create_MUTEXCL_violation(sysAsgnAP, false));
 
-    return {new_ucw, sysTstAP, sysAsgnAP, sysOutR_AP};
+    return {new_ucw, sysTstAP, sysAsgnAP, sysOutAP};
 }
 
 /* Add an edge labelled `label` into `dst_state` from every state except `dst_state` itself. */
@@ -472,12 +467,13 @@ void add_edge_to_every_state(twa_graph_ptr& atm,
 }
 
 
-/** return "none are true" OR "≥2 are true" */
-formula create_MUTEXCL_violation(const hset<formula>& props_)
+/** @returns: formula for "≥2 are true" OR "none are true" (the latter only if @param forbid_empty is set) */
+formula create_MUTEXCL_violation(const hset<formula>& props_, bool forbid_empty)
 {
     vector<formula> props(props_.begin(), props_.end());
     vector<formula> big_OR;
-    big_OR.push_back(formula::Not(formula::Or(props)));
+    if (forbid_empty)
+        big_OR.push_back(formula::Not(formula::Or(props)));
     for (uint i1 = 0; i1 < props.size(); ++i1)
         for (uint i2 = i1+1; i2 < props.size(); ++i2)
             big_OR.push_back(formula::And({props.at(i1), props.at(i2)}));

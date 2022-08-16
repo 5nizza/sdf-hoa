@@ -58,6 +58,26 @@ vector<BDD> sdf::GameSolver::get_uncontrollable_vars_bdds()
 }
 
 
+// This function is not currently used but useful for debugging:
+// dump BDD as a dot
+void dumpBddAsDot(Cudd& cudd, const BDD& model, const string& name)
+{
+    const char* inames[cudd.ReadSize()];
+    string inames_str[cudd.ReadSize()];  // we have to store those strings for the time DumpDot is operating
+    for (uint i = 0; i < (uint)cudd.ReadSize(); ++i)
+    {
+        inames_str[i] = cudd.getVariableName(i);
+        inames[i] = inames_str[i].c_str();
+    }
+
+    FILE *file = fopen((name + ".dot").c_str(), "w");
+    const char *onames[] = {name.c_str()};
+
+    cudd.DumpDot((vector<BDD>) {model}, inames, onames, file);
+    fclose(file);
+}
+
+
 void sdf::GameSolver::build_error_bdd()
 {
     // Error BDD is true on reaching any of the accepting states.
@@ -73,6 +93,8 @@ void sdf::GameSolver::build_error_bdd()
     for (auto s = 0u; s < aut->num_states(); ++s)
         if (aut->state_is_accepting(s))
             error |= cudd.bddVar(s + NOF_SIGNALS);  // NOLINT(cppcoreguidelines-narrowing-conversions)
+
+//    dumpBddAsDot(cudd, error, "error");
 }
 
 
@@ -138,27 +160,6 @@ BDD translate_formula_into_cuddBDD(const spot::formula& formula,
     MASSERT(0, "unexpected type of f: " << formula);
 }
 
-
-// This function is not currently used but useful for debugging:
-// dump BDD as a dot
-void dumpBddAsDot(Cudd& cudd, const BDD& model, const string& name)
-{
-    const char* inames[cudd.ReadSize()];
-    string inames_str[cudd.ReadSize()];  // we have to store those strings for the time DumpDot is operating
-    for (uint i = 0; i < (uint)cudd.ReadSize(); ++i)
-    {
-        inames_str[i] = cudd.getVariableName(i);
-        inames[i] = inames_str[i].c_str();
-    }
-
-    FILE *file = fopen((name + ".dot").c_str(), "w");
-    const char *onames[] = {name.c_str()};
-
-    cudd.DumpDot((vector<BDD>) {model}, inames, onames, file);
-    fclose(file);
-}
-
-
 void sdf::GameSolver::build_pre_trans_func()
 {
     // This function ensures: for each state, cuddIdx = state+NOF_SIGNALS
@@ -197,7 +198,8 @@ void sdf::GameSolver::build_pre_trans_func()
             s_transitions |= s_t;
         }
         pre_trans_func[s + NOF_SIGNALS] = s_transitions;
-        //dumpBddAsDot(cudd, s_transitions, "s" + to_string(s));
+
+//        dumpBddAsDot(cudd, s_transitions, "s" + to_string(s));
     }
 }
 
@@ -414,7 +416,7 @@ BDD sdf::GameSolver::pre_sys(BDD dst) {
 
     Note that we do not replace t variables in the error bdd.
 
-    :return: BDD of the predecessor states
+    @returns: BDD of the predecessor states
     **/
 
     // NOTE: I tried considering two special cases: error(t,u,c) and error(t),
@@ -528,6 +530,17 @@ BDD sdf::GameSolver::get_nondet_strategy()
 
 hmap<uint,BDD> sdf::GameSolver::extract_output_funcs()
 {
+    /**
+     * The procedure is:
+     * for i in len(controllable)-1 ... 0:
+     *     c_arena = nondet_strat.ExistAbstract(controllable[0:i))
+     *     c_can_be_true   = c_arena(c=true)                            // over (t,i) variables
+     *     c_can_be_false  = c_arena(c=false)
+     *     c_must_be_true  = c_can_be_true & ~c_can_be_false
+     *     c_must_be_false = c_can_be_false & ~c_can_be_true
+     *     ...
+     */
+
     INF("extract_output_funcs..");
 
     cudd.FreeTree();  // ordering that worked for win region computation might not work here
@@ -539,6 +552,10 @@ hmap<uint,BDD> sdf::GameSolver::extract_output_funcs()
     while (!controls.empty())
     {
         BDD c = controls.back(); controls.pop_back();
+
+        auto c_name = inputs_outputs[c.NodeReadIndex()].ap_name();
+        DEBUG("extracting " << c_name << "...");
+//        dumpBddAsDot(cudd, c, c_name);
 
         BDD c_arena;
         if (!controls.empty())
@@ -563,8 +580,8 @@ hmap<uint,BDD> sdf::GameSolver::extract_output_funcs()
         for (auto var_cudd_idx : support_indices)
         {
             // TODO: try the specific order where for output g_i the input r_i is abstracted last
-            // while non relevant variables are abstracted first
-            // (would be cool to calculate related variables and abstract them last)
+            //       while non relevant variables are abstracted first
+            //       (would be cool to calculate related variables and abstract them last)
             auto v = cudd.ReadVars((int)var_cudd_idx);
             auto new_c_must_be_false = c_must_be_false.ExistAbstract(v);
             auto new_c_must_be_true = c_must_be_true.ExistAbstract(v);
@@ -651,6 +668,7 @@ aiger* sdf::GameSolver::synthesize()
     cudd.AutodynDisable();  // TODO: disabling re-ordering greatly helps on some examples (load_balancer, lift(?)), but on others (prioritised_arbiter) it worsens things.
 
     non_det_strategy = get_nondet_strategy();
+
     log_time("get_nondet_strategy");
 
     // cleaning non-used BDDs
@@ -711,7 +729,6 @@ void sdf::GameSolver::model_to_aiger()
         aiger_by_cudd[bddVarIdx] = aigerLit;
         auto outName = inputs_outputs[bddVarIdx].ap_name();  // hm, I don't like this implicit knowledge
         aiger_add_output(aiger_lib, aigerLit, outName.c_str());
-        // dumpBddAsDot(cudd, bddModel, outName);
     }
 
     // aiger: add latches, but only those that are referenced in the output models (+implied dependencies).

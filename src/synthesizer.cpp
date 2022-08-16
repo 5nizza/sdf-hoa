@@ -192,7 +192,7 @@ bool sdf::synthesize_formula(const spot::formula& formula,
     // on some examples the high optimization is the bottleneck
     // while Medium seems to be good enough
     // examples: try_ack_arbiter, lift
-    // NB: the results of SYNTCOMP'21 show that Medium performs better overall (by a slight margin)
+    // The results of SYNTCOMP'21 confirm that Medium performs better by a noticeable margin.
 
     Timer timer;
     spot::twa_graph_ptr aut = translator.run(neg_formula);
