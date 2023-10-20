@@ -5,29 +5,24 @@ list(APPEND SRC_FILES
         "ltl_parser.cpp"
         "ehoa_parser.cpp"
         "utils.cpp"
+        "logger_instance.cpp"
         )
 
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-# set the default build type to 'debug'.
-SET(CMAKE_BUILD_TYPE Debug CACHE STRING "default to debug" FORCE)
 
-# main (TLSF input format)
-add_executable       (sdf-tlsf-opt ${SRC_FILES} main)
-target_link_libraries(sdf-tlsf-opt "${LIBS}")
-set_target_properties(sdf-tlsf-opt PROPERTIES COMPILE_FLAGS "${COMPILE_FLAGS} -fPIC -DNDEBUG -O3")
+# build common oject files into a 'virtual library'
+add_library(sdf-object-library OBJECT ${SRC_FILES})
 
-add_executable       (sdf-tlsf-debug ${SRC_FILES} main)
-target_link_libraries(sdf-tlsf-debug "${LIBS}")
-set_target_properties(sdf-tlsf-debug PROPERTIES COMPILE_FLAGS "${COMPILE_FLAGS} -fPIC")
+# sdf-tlsf
+add_executable(sdf-tlsf main.cpp $<TARGET_OBJECTS:sdf-object-library>)
+target_link_libraries(sdf-tlsf "${LIBS}")
 
-# main (HOA input format)
-add_executable       (sdf-hoa-opt ${SRC_FILES} main_hoa)
-target_link_libraries(sdf-hoa-opt "${LIBS}")
-set_target_properties(sdf-hoa-opt PROPERTIES COMPILE_FLAGS "${COMPILE_FLAGS} -fPIC -DNDEBUG -O3")
-
-add_executable       (sdf-hoa-debug ${SRC_FILES} main_hoa)
-target_link_libraries(sdf-hoa-debug "${LIBS}")
-set_target_properties(sdf-hoa-debug PROPERTIES COMPILE_FLAGS "${COMPILE_FLAGS} -fPIC")
+# sdf-hoa
+add_executable(sdf-hoa main_hoa.cpp $<TARGET_OBJECTS:sdf-object-library>)
+target_link_libraries(sdf-hoa "${LIBS}")
 
 # shared library
-add_library(${SDF_LIB_NAME} SHARED ${SRC_FILES})
+add_library(${SDF_LIB_NAME} SHARED $<TARGET_OBJECTS:sdf-object-library>)

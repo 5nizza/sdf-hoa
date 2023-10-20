@@ -1,7 +1,3 @@
-//
-// Created by ayrat on 29/06/18.
-//
-
 #include "synthesizer.hpp"
 
 #include "game_solver.hpp"
@@ -9,11 +5,14 @@
 #include "ltl_parser.hpp"
 #include "ehoa_parser.hpp"
 #include "utils.hpp"
+#include "atm_helper.hpp"
 #include "syntcomp_constants.hpp"
 #include "timer.hpp"
 
 #define BDD spotBDD
     #include <spot/twaalgos/dot.hh>
+    #include <spot/twaalgos/translate.hh>
+//    #include <spot/parseaut/public.hh>
 #undef BDD
 
 
@@ -28,40 +27,23 @@ extern "C"
 using namespace std;
 using namespace sdf;
 
-// Ensures that the logger "console" exists
-struct Initializer
+
+#define DEBUG(message) {spdlog::get("console")->debug() << message;}  // NOLINT(bugprone-macro-parentheses)
+#define INF(message) {spdlog::get("console")->info() << message;}     // NOLINT(bugprone-macro-parentheses)
+
+#define hset unordered_set
+
+
+int sdf::run_hoa(const SpecDescr& spec_descr,
+                 const std::vector<uint>& k_to_iterate)
 {
-    std::shared_ptr<spdlog::logger> logger;
-
-    Initializer()
-    {
-        logger = spdlog::stdout_logger_mt("console", false);
-        spdlog::set_pattern("%H:%M:%S %v ");
-    }
-};
-Initializer libraryInitializer;
-
-
-#define logger spdlog::get("console")
-#define DEBUG(message) {logger->debug() << message;}
-#define INF(message) {logger->info() << message;}
-
-
-int sdf::run(const std::string& hoa_file_name,
-             const std::vector<uint>& k_to_iterate,
-             bool extract_model,
-             const std::string& output_file_name)
-{
-    set<spot::formula> inputs, outputs;
-    spot::twa_graph_ptr aut;
-    bool is_moore;
-    tie(aut, inputs, outputs, is_moore) = parse_ehoa(hoa_file_name);
+    auto [aut, inputs, outputs, is_moore] = read_ehoa(spec_descr.file_name);
 
     // TODO: what happens when tlsf does have inputs/outputs but the formula doesn't mention them?
     //       (should still have it)
 
     INF("\n" <<
-        "  hoa: " << hoa_file_name << "\n" <<
+        "  hoa: " << spec_descr.file_name << "\n" <<
         "  inputs: " << join(", ", inputs) << "\n" <<
         "  outputs: " << join(", ", outputs) << "\n" <<
         "  UCW atm size: " << aut->num_states() << "\n" <<
@@ -74,7 +56,7 @@ int sdf::run(const std::string& hoa_file_name,
     }
 
     aiger* model;
-    bool game_is_real = synthesize_atm(aut, inputs, outputs, is_moore, k_to_iterate, extract_model, model);
+    bool game_is_real = synthesize_atm(SpecDescr2(aut, inputs, outputs, is_moore, spec_descr.extract_model), k_to_iterate, model);
 
     if (!game_is_real)
     {   // game is won by Adam, but it does not mean the invoked spec is unrealizable (due to k-reduction)
@@ -84,14 +66,14 @@ int sdf::run(const std::string& hoa_file_name,
 
     // game is won by Eve, so the spec is realizable
 
-    if (extract_model)
+    if (spec_descr.extract_model)
     {
-        if (!output_file_name.empty())
+        if (!spec_descr.output_file_name.empty())
         {
-            INF("writing a model to " << output_file_name);
-            int res = (output_file_name == "stdout") ?
+            INF("writing a model to " << spec_descr.output_file_name);
+            int res = (spec_descr.output_file_name == "stdout") ?
                       aiger_write_to_file(model, aiger_ascii_mode, stdout):
-                      aiger_open_and_write_to_file(model, output_file_name.c_str());
+                      aiger_open_and_write_to_file(model, spec_descr.output_file_name.c_str());
             MASSERT(res, "Could not write the model to file");
         }
         aiger_reset(model);
@@ -101,33 +83,30 @@ int sdf::run(const std::string& hoa_file_name,
     return SYNTCOMP_RC_REAL;
 }
 
-int sdf::run(bool check_unreal,
-             const std::string& tlsf_file_name,
-             const std::vector<uint>& k_to_iterate,
-             bool extract_model,
-             const std::string& output_file_name)
+int sdf::run_tlsf(const SpecDescr& spec_descr,
+                  const std::vector<uint>& k_to_iterate)
 {
     spot::formula formula;
-    set<spot::formula> inputs, outputs;
+    hset<spot::formula> inputs, outputs;
     bool is_moore;
-    tie(formula, inputs, outputs, is_moore) = parse_tlsf(tlsf_file_name);
+    tie(formula, inputs, outputs, is_moore) = parse_tlsf(spec_descr.file_name);
 
-    // TODO: what happens when tlsf does have inputs/outputs but the formula doesn't mention them?
+    // TODO: what happens when TLSF does have inputs/outputs but the formula doesn't mention them?
     //       (should still have it)
 
     INF("\n" <<
-        "  tlsf: " << tlsf_file_name << "\n" <<
+        "  tlsf: " << spec_descr.file_name << "\n" <<
         "  formula: " << formula << "\n" <<
         "  inputs: " << join(", ", inputs) << "\n" <<
         "  outputs: " << join(", ", outputs) << "\n" <<
         "  is_moore: " << is_moore);
-    INF("checking " << (check_unreal ? "UN" : "") << "realizability");
+    INF("checking " << (spec_descr.check_unreal ? "UN" : "") << "realizability");
 
     aiger* model;
     bool game_is_real;
-    game_is_real = check_unreal?
-            synthesize_formula(spot::formula::Not(formula), outputs, inputs, !is_moore, k_to_iterate, extract_model, model):
-            synthesize_formula(formula, inputs, outputs, is_moore, k_to_iterate, extract_model, model);
+    game_is_real = spec_descr.check_unreal?
+            synthesize_formula(SpecDescr2(spot::formula::Not(formula), outputs, inputs, !is_moore, spec_descr.extract_model), k_to_iterate, model):
+            synthesize_formula(SpecDescr2(formula, inputs, outputs, is_moore, spec_descr.extract_model), k_to_iterate, model);
 
     if (!game_is_real)
     {   // game is won by Adam, but it does not mean the invoked spec is unrealizable (due to k-reduction)
@@ -137,40 +116,42 @@ int sdf::run(bool check_unreal,
 
     // game is won by Eve, so the (original or dualized) spec is realizable
 
-    if (extract_model)
+    if (spec_descr.check_unreal)
+        INF("(the game is won by Eve but the spec was dualized)");
+
+    cout << (spec_descr.check_unreal ? SYNTCOMP_STR_UNREAL : SYNTCOMP_STR_REAL) << endl;
+
+    if (spec_descr.extract_model)
     {
-        if (!output_file_name.empty())
+        if (!spec_descr.output_file_name.empty())
         {
-            INF("writing a model to " << output_file_name);
-            int res = (output_file_name == "stdout") ?
-                    aiger_write_to_file(model, aiger_ascii_mode, stdout):
-                    aiger_open_and_write_to_file(model, output_file_name.c_str());
+            INF("writing a model to " << spec_descr.output_file_name);
+            int res = (spec_descr.output_file_name == "stdout") ?
+                      aiger_write_to_file(model, aiger_ascii_mode, stdout):
+                      aiger_open_and_write_to_file(model, spec_descr.output_file_name.c_str());
             MASSERT(res, "Could not write the model to file");
         }
         aiger_reset(model);
     }
 
-    if (check_unreal)
-      INF("(the game is won by Eve but the spec was dualized)");
-
-    cout << (check_unreal ? SYNTCOMP_STR_UNREAL : SYNTCOMP_STR_REAL) << endl;
-    return (check_unreal ? SYNTCOMP_RC_UNREAL : SYNTCOMP_RC_REAL);
+    return (spec_descr.check_unreal ? SYNTCOMP_RC_UNREAL : SYNTCOMP_RC_REAL);
 }
 
 
-bool sdf::synthesize_atm(spot::twa_graph_ptr ucw_aut,
-                         const std::set<spot::formula>& inputs,
-                         const std::set<spot::formula>& outputs,
-                         bool is_moore,
-                         const vector<uint>& k_to_iterate,
-                         bool extract_model,
+bool sdf::synthesize_atm(const SpecDescr2<spot::twa_graph_ptr>& spec_descr,
+                         const std::vector<uint>& k_to_iterate,
                          aiger*& model)
 {
     for (auto k: k_to_iterate)
     {
         INF("trying k = " << k);
-        auto k_aut = k_reduce(ucw_aut, k);
-        INF("k-automaton # states: " << k_aut->num_states());
+        auto k_aut = k_reduce(spec_descr.spec, k);
+
+        INF("automaton before iterative merging states/edges: "
+            << k_aut->num_states() << " states, "
+            << k_aut->num_edges() << " edges");
+        merge_atm(k_aut);
+        INF("merged k-automaton: " << k_aut->num_states() << " states, " << k_aut->num_edges() << " edges");
 
         {   // debug
             stringstream ss;
@@ -178,32 +159,29 @@ bool sdf::synthesize_atm(spot::twa_graph_ptr ucw_aut,
             DEBUG("\n" << ss.str());
         }
 
-        GameSolver solver(is_moore, inputs, outputs, k_aut, 3600);
-        if ((!extract_model && solver.check_realizability()) ||
-            (extract_model && (model = solver.synthesize())!=nullptr))
-            return true;
+        GameSolver solver(spec_descr.is_moore, spec_descr.inputs, spec_descr.outputs, k_aut, 3600);
+        if (spec_descr.extract_model)
+            return (model = solver.synthesize())!=nullptr;
+        else
+            return solver.check_realizability();
     }
 
     return false;
 }
 
 
-bool sdf::synthesize_formula(const spot::formula& formula,
-                             const set<spot::formula>& inputs,
-                             const set<spot::formula>& outputs,
-                             bool is_moore,
-                             const vector<uint>& k_to_iterate,
-                             bool extract_model,
+bool sdf::synthesize_formula(const SpecDescr2<spot::formula>& spec_descr,
+                             const std::vector<uint>& k_to_iterate,
                              aiger*& model)
 {
-    spot::formula neg_formula = spot::formula::Not(formula);
+    spot::formula neg_formula = spot::formula::Not(spec_descr.spec);
     spot::translator translator;
     translator.set_type(spot::postprocessor::BA);
     translator.set_pref(spot::postprocessor::SBAcc);
     translator.set_level(spot::postprocessor::Medium);
-    // on some examples the high optimization is the bottleneck
-    // while Medium seems to be good enough (of course, better to benchmark this) // TODO
-    // examples: try_ack_arbiter, lift
+    // On some examples the high optimization is the bottleneck
+    // while Medium seems to be good enough. Eamples: try_ack_arbiter, lift
+    // The results of SYNTCOMP'21 confirm that Medium performs better by a noticeable margin, so we use Medium.
 
     Timer timer;
     spot::twa_graph_ptr aut = translator.run(neg_formula);
@@ -216,6 +194,7 @@ bool sdf::synthesize_formula(const spot::formula& formula,
         DEBUG("\n" << ss.str());
     }
 
-    return synthesize_atm(aut, inputs, outputs, is_moore, k_to_iterate, extract_model, model);
+    return synthesize_atm(SpecDescr2(aut, spec_descr.inputs, spec_descr.outputs, spec_descr.is_moore, spec_descr.extract_model),
+                          k_to_iterate,
+                          model);
 }
-

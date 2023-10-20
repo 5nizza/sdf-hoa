@@ -1,9 +1,27 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.0max)
 project(sdf VERSION 0.0.0)
 
 set(SDF_LIB_NAME sdf)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -std=c++14 -pthread")
+# Set a default build type if none was specified
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  message(STATUS "Setting build type to 'Release' as none was specified.")
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
+  # Set the possible values of build type for cmake-gui
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release")
+endif()
+
+message("\nBuild type: ${CMAKE_BUILD_TYPE}")
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-unknown-pragmas -pthread -fPIC")
+
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static")  # additionally for syntcomp
+
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS} -g")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3 -DNDEBUG")
 
 set(THIRD_PARTIES "${PROJECT_SOURCE_DIR}/third_parties")
 
@@ -19,17 +37,19 @@ include_directories("${THIRD_PARTIES}/cudd-3.0.0/cudd/"
                     "${THIRD_PARTIES}/cudd-3.0.0/st/"
                     "${THIRD_PARTIES}/cudd-3.0.0/mtr/"
                     "${THIRD_PARTIES}/cudd-3.0.0/")
-include_directories("${THIRD_PARTIES}/args-6.2.3/")
+include_directories("${THIRD_PARTIES}/args-6.4.6/")
 include_directories("${THIRD_PARTIES}/pstreams-1.0.3/")
 
 list(APPEND LIBS "${THIRD_PARTIES}/cudd-3.0.0/cudd/.libs/libcudd.a")
 list(APPEND LIBS "${THIRD_PARTIES}/aiger-1.9.4/aiger.o")
-list(APPEND LIBS "spot" "bddx")
 
 if(EXISTS "${THIRD_PARTIES}/spot-install-prefix/")
-    message("\n ************* I am going to use locally installed spot **************** \n")
+    message("\n ********* I am going to use locally installed spot (and link it statically) *********** \n")
     include_directories("${THIRD_PARTIES}/spot-install-prefix/include/")
-    link_directories("${THIRD_PARTIES}/spot-install-prefix/lib/")
+    list(APPEND LIBS "${THIRD_PARTIES}/spot-install-prefix/lib/libspot.a")
+    list(APPEND LIBS "${THIRD_PARTIES}/spot-install-prefix/lib/libbddx.a")
+else()
+    list(APPEND LIBS "spot" "bddx")
 endif()
 
 add_subdirectory(src)
@@ -37,6 +57,6 @@ add_subdirectory(tests)
 
 SET(BUILD_GMOCK OFF CACHE BOOL "")  # do not build gmock
 SET(INSTALL_GTEST OFF CACHE BOOL "") # do not install googletest
-add_subdirectory(${THIRD_PARTIES}/googletest-release-1.10.0/)
+add_subdirectory(${THIRD_PARTIES}/googletest-release-1.14.0/)
 
 enable_testing()

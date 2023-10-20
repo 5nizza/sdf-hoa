@@ -1,13 +1,10 @@
-//
-// Created by ayrat on yestoday.
-//
-
 #pragma once
 
 #include <utility>
 #include <vector>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 
 #define BDD spotBDD
@@ -16,11 +13,12 @@
 #undef BDD
 
 
-extern "C" {
-#include <aiger.h>
-#include <mtr.h>
-#include <cudd.h>
-};
+extern "C"
+{
+    #include <aiger.h>
+    #include <mtr.h>
+    #include <cudd.h>
+}
 
 #include <cuddObj.hh>
 #include "my_assert.hpp"
@@ -29,15 +27,18 @@ extern "C" {
 namespace sdf
 {
 
+/**
+ * Backwards-exploration game solver using BDDs.
+ */
 class GameSolver
 {
 
 public:
     /// NOTE: time_limit_sec is used for heuristics (but I won't stop on reaching it)
     GameSolver(bool is_moore_,
-               const std::set<spot::formula>& inputs_,
-               const std::set<spot::formula>& outputs_,
-               spot::twa_graph_ptr& aut_,
+               const std::unordered_set<spot::formula>& inputs_,
+               const std::unordered_set<spot::formula>& outputs_,
+               const spot::twa_graph_ptr& aut_,
                uint time_limit_sec_ = 3600) :
         is_moore(is_moore_),
         inputs(inputs_.begin(), inputs_.end()),
@@ -46,7 +47,7 @@ public:
         aut(aut_),
         time_limit_sec(time_limit_sec_)
     {
-        inputs_outputs.insert(inputs_outputs.end(), inputs.begin(), inputs.end());
+        inputs_outputs.insert(inputs_outputs.end(), inputs.begin(), inputs.end());      // NB: inputs, not inputs_
         inputs_outputs.insert(inputs_outputs.end(), outputs.begin(), outputs.end());
     }
 
@@ -67,8 +68,8 @@ private:
 
 private:
     const bool is_moore;
-    const std::vector<spot::formula> inputs;  // I use vector instead of set bcz I need ordered variables
-    const std::vector<spot::formula> outputs; // (ordered)
+    const std::vector<spot::formula> inputs;             // (ordered)
+    const std::vector<spot::formula> outputs;            // (ordered)
     /*const*/ std::vector<spot::formula> inputs_outputs; // (ordered)
     const uint NOF_SIGNALS;
     spot::twa_graph_ptr aut; // TODO: make const

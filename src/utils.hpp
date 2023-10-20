@@ -1,7 +1,3 @@
-//
-// Created by ayrat on 31/05/18.
-//
-
 #pragma once
 
 #include <memory>
@@ -12,9 +8,11 @@
 #include <sstream>
 #include <vector>
 #include <set>
+#include <map>
 #include <algorithm>
 #include <cctype>
 #include <locale>
+#include <unordered_set>
 #include "my_assert.hpp"
 
 
@@ -52,9 +50,25 @@ std::string join(const std::string& sep, const TC& elements)
 {
     std::stringstream ss;
     uint i = 1;
-    for (const auto &e: elements)
+    for (const auto& e: elements)
     {
         ss << e;
+        if (i != elements.size())
+            ss << sep;
+        i++;
+    }
+    return ss.str();
+}
+
+template<typename TC, typename ToStr>
+inline
+std::string join(const std::string& sep, const TC& elements, ToStr convert_to_str)
+{
+    std::stringstream ss;
+    uint i = 1;
+    for (const auto& e: elements)
+    {
+        ss << convert_to_str(e);
         if (i != elements.size())
             ss << sep;
         i++;
@@ -138,7 +152,7 @@ std::string string_format(const std::string& format, Args ... args)
 
 template<typename T>
 inline
-bool contains(const std::vector<T>& elements, const T &elem)
+bool contains(const std::vector<T>& elements, const T& elem)
 {
     return std::find(elements.begin(), elements.end(), elem) != elements.end();
 }
@@ -149,6 +163,7 @@ bool contains(const std::set<T>& elements, const T& elem)
 {
     return elements.find(elem) != elements.end();
 }
+
 
 /* Execute the command, return <rc, stdout, stderr>. */
 std::tuple<int, std::string, std::string> execute(const char *cmd);
@@ -168,16 +183,14 @@ std::vector<T> range(const T &min, const T &max_excluded)  // T to be able to us
     return numbers;
 }
 
-
-template<typename E>
-E pop(std::set<E>& container)
+template<typename E,typename Container>
+E pop_first(Container& container)
 {
     auto it = container.begin();
-    E elem = *it;
+    auto result = *it;  // save before it gets invalidated by `erase`
     container.erase(it);
-    return elem;
+    return result;
 }
-
 
 inline
 std::string create_tmp_folder()
@@ -190,4 +203,203 @@ std::string create_tmp_folder()
 }
 
 
-} // namespace sdf
+template<typename E, typename Container>
+std::set<E>
+a_minus_b(const std::set<E>& a, const Container& b)
+{
+    std::set<E> result = a;
+    for (const auto& e : b)
+        result.erase(e);
+    return result;
+}
+
+template<typename E, typename Container>
+std::unordered_set<E>
+a_minus_b(const std::unordered_set<E>& a, const Container& b)
+{
+    std::unordered_set<E> result = a;
+    for (const auto& e : b)
+        result.erase(e);
+    return result;
+}
+
+template<typename E>
+std::vector<E>
+a_minus_b(const std::vector<E>& a, const std::unordered_set<E>& b)
+{
+    std::vector<E> result;
+    for (const auto& e : a)
+        if (b.count(e) == 0)
+            result.push_back(e);
+    return result;
+}
+
+template<typename Container>
+Container
+a_intersection_b(const Container& a, const Container& b)
+{
+    Container result;
+    for (const auto& x : a)
+        if (b.find(x) != b.end())
+            result.insert(x);
+    return result;
+}
+
+template<typename Container>
+Container
+a_union_b(const Container& a, const Container& b)
+{
+    Container result = a;  // copy
+    result.insert(b.begin(), b.end());
+    return result;
+}
+
+template<typename Container>
+Container
+a_union_b(const Container& a, const Container& b, const Container& c)
+{
+    Container result = a;  // copy
+    result.insert(b.begin(), b.end());
+    result.insert(c.begin(), c.end());
+    return result;
+}
+
+
+//template<typename E, typename IteratorStart, typename IteratorEnd, typename UnaryPred>
+//std::vector<E> filter(IteratorStart it1, IteratorEnd it2, UnaryPred pred)
+//{
+//    std::vector<E> result;
+//    std::copy_if(it1, it2, std::back_inserter(result), pred);
+//    return result;
+//}
+
+template<typename E, typename Container, typename UnaryPred>
+std::vector<E> filter(const Container& cont, UnaryPred pred)
+{
+    std::vector<E> result;
+    std::copy_if(cont.begin(), cont.end(), std::back_inserter(result), pred);
+    return result;
+}
+
+template<typename E, typename Container>
+std::vector<std::vector<E>> all_subsets(const Container& elements_, bool skip_empty=false)
+{
+    std::vector<E> elements(elements_.begin(), elements_.end());  // for indexed access
+    std::vector<std::vector<E>> result;
+
+    for (uint mask = skip_empty? 1:0; mask < 1u<<elements.size(); ++mask)
+    {
+        std::vector<E> subset;
+        for (uint idx = 0; idx < elements.size(); ++idx)
+        {
+            if ((1<<idx & mask) != 0)
+                subset.push_back(elements[idx]);
+        }
+        result.push_back(subset);
+    }
+
+    return result;
+}
+
+
+// source: modern c++ programming cookbook, page 254
+template<typename OrderedContainer, typename ElementHasher>
+size_t hash_ordered(const OrderedContainer& container, ElementHasher hasher)
+{
+    if (container.empty())
+        return 0;
+
+    size_t hash_value = 17;
+
+    hash_value = 31*hash_value + std::hash<size_t>()(container.size());
+    for (const auto& e : container)
+        hash_value = 31*hash_value + hasher(e);
+    return hash_value;
+}
+
+
+// This function XOR's the hash values of the elements
+// (hence the order is not important)
+template<typename Container, typename ElementHasher>
+size_t xor_hash(const Container& container, ElementHasher hasher)
+{
+    auto hash_value = std::hash<size_t>()(container.size());
+
+    if (container.empty())
+        return hash_value;
+
+    for (const auto& e : container)
+        hash_value ^= hasher(e);
+
+    return hash_value;
+}
+
+
+template<typename T1, typename T2, typename H1, typename H2>
+size_t do_hash_pair(const std::pair<T1,T2>& x, H1 h1, H2 h2)
+{
+    size_t hash_value = 17;
+    hash_value = 31*hash_value + h1(x.first);
+    hash_value = 31*hash_value + h2(x.second);
+    return hash_value;
+}
+
+
+template<typename T, typename U, typename H1=std::hash<T>, typename H2=std::hash<U>>
+struct pair_hash
+{
+    size_t operator()(const std::pair<T, U>& x) const
+    {
+        size_t hash_value = 17;
+        hash_value = 31*hash_value + H1()(x.first);
+        hash_value = 31*hash_value + H2()(x.second);
+        return hash_value;
+    }
+};
+
+//struct pair_hash
+//{
+//    template<typename T, typename U>
+//    size_t operator()(const std::pair<T, U>& x) const
+//    {
+//        size_t hash_value = 17;
+//        hash_value = 31*hash_value + std::hash<T>()(x.first);
+//        hash_value = 31*hash_value + std::hash<U>()(x.second);
+//        return hash_value;
+//    }
+//};
+
+
+template<typename T>
+std::vector<T> to_vector(const std::set<T>& c)
+{
+    return std::vector<T>(c.begin(), c.end());
+}
+
+template<typename T>
+std::vector<T> to_vector(const std::unordered_set<T>& c)
+{
+    return std::vector<T>(c.begin(), c.end());
+}
+
+template<typename Container>
+std::vector<typename Container::key_type> keys(const Container& container)
+{
+    std::vector<typename Container::key_type> result;
+    for (const auto& [k,v] : container)
+        result.push_back(k);
+    return result;
+}
+
+template<typename Container>
+std::unordered_set<typename Container::key_type> keysSet(const Container& container)
+{
+    std::unordered_set<typename Container::key_type> result;
+    for (const auto& [k,v] : container)
+        result.insert(k);
+    return result;
+}
+
+
+
+}  // namespace sdf

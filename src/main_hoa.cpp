@@ -12,8 +12,15 @@ using namespace std;
 using namespace sdf;
 
 
+// TODO: this is ugly!
+#define DEBUG(message) spdlog::get("console")->debug()<<message
+#define INF(message) spdlog::get("console")->info()<<message
+
+
 int main(int argc, const char *argv[])
 {
+    auto logger = spdlog::get("console");
+
     args::ArgumentParser parser("Synthesizer from UCW (HOA format)");
     parser.helpParams.width = 100;
     parser.helpParams.helpindent = 26;
@@ -97,15 +104,14 @@ int main(int argc, const char *argv[])
     vector<uint> k_list(k_list_arg.Get());
     bool check_real_only(check_real_only_flag.Get());
 
-    spdlog::get("console")->info()
-            << "hoa_file: " << hoa_file_name << ", "
-            << "k: " << "[" << join(", ", k_list) << "], "
-            << "output_file: " << output_file_name;
+    INF("hoa_file: " << hoa_file_name << ", " <<
+        "k: " << "[" << join(", ", k_list) << "], " <<
+        "output_file: " << output_file_name);
 
     vector<uint> k_to_iterate = (k_list.size() == 2?
                                  range(k_list[0], k_list[1]+1):
                                  (k_list.size()>2? k_list: range(k_list[0], k_list[0]+1)));
 
-    return sdf::run(hoa_file_name, k_to_iterate, !check_real_only, output_file_name);
+    return sdf::run_hoa(SpecDescr(false, hoa_file_name, !check_real_only, output_file_name), k_to_iterate);
 }
 

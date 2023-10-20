@@ -1,6 +1,3 @@
-//
-// Created by ayrat on 23/06/18.
-//
 #pragma once
 
 #define SYNTCOMP_RC_REAL 10

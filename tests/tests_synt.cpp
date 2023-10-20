@@ -1,8 +1,5 @@
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "cert-err58-cpp"
-//
-// Created by ayrat on 23/06/18.
-//
 
 #include <string>
 #include <utility>
@@ -60,6 +57,9 @@ const vector<SpecParam> specs =
     SpecParam("round_robin_arbiter2.tlsf", true),
     SpecParam("prioritized_arbiter.tlsf", true),
     SpecParam("mealy_moore_real.tlsf", true),
+
+    SpecParam("testing_unknown_APs.tlsf", true),
+    SpecParam("outputs_only.tlsf", true)
 };
 
 class RealCheckFixture : public ::testing::TestWithParam<SpecParam> { };
@@ -67,7 +67,7 @@ class RealCheckFixture : public ::testing::TestWithParam<SpecParam> { };
 TEST_P(RealCheckFixture, check_unreal)  // TODO: during test execution, test names are shown ugly (SpecParam should be updated)
 {
     auto spec = GetParam();
-    auto status = run(true, "./specs/" + spec.name, {4});
+    auto status = run_tlsf(SpecDescr(true, "./specs/" + spec.name, false), {4});
     if (spec.is_real)
         ASSERT_EQ(SYNTCOMP_RC_UNKNOWN, status);
     else
@@ -77,7 +77,7 @@ TEST_P(RealCheckFixture, check_unreal)  // TODO: during test execution, test nam
 TEST_P(RealCheckFixture, check_real)
 {
     auto spec = GetParam();
-    auto status = run(false, "./specs/" + spec.name, {4});
+    auto status = run_tlsf(SpecDescr(false, "./specs/" + spec.name, false), {4});
     if (spec.is_real)
         ASSERT_EQ(SYNTCOMP_RC_REAL, status);
     else
@@ -103,7 +103,8 @@ const vector<string> specs_for_mc =
     "round_robin_arbiter.tlsf",
 //    "round_robin_arbiter2.tlsf",  // MC takes 4s
     "prioritized_arbiter.tlsf",
-    "mealy_moore_real.tlsf"
+    "mealy_moore_real.tlsf",
+    "outputs_only.tlsf"
 };
 
 class SyntWithMCFixture: public ::testing::TestWithParam<string>
@@ -130,7 +131,7 @@ TEST_P(SyntWithMCFixture, synt_and_verify)
     auto specPath = "./specs/" + spec;
     auto modelPath = tmpFolder + "/" + spec + ".aag";
     cout << "(TEST) SYNTHESIS..." << endl;
-    auto status = sdf::run(false, specPath, {2}, true, modelPath);
+    auto status = run_tlsf(SpecDescr(false, specPath, true, modelPath), {2});
     ASSERT_EQ(SYNTCOMP_RC_REAL, status);
     cout << "(TEST) SYNTHESIS: SUCCESS!" << endl;
 
@@ -173,7 +174,7 @@ class HOACheckFixture : public ::testing::TestWithParam<SpecParam> { };
 TEST_P(HOACheckFixture, check_real_unreal)
 {
     auto spec = GetParam();
-    auto status = run("./specs/hoa/" + spec.name, {4});
+    auto status = run_hoa(SpecDescr(false, "./specs/hoa/" + spec.name), {4});
     if (spec.is_real)
         ASSERT_EQ(SYNTCOMP_RC_REAL, status);
     else
