@@ -20,6 +20,7 @@ but make sure to modify the paths mentioned in `CmakeLists.txt`.
 - [args](https://github.com/Taywee/args): version 6.4.6
 - [googletest](https://github.com/google/googletest) version 1.14.0\
   You need to download the source code together with its own `CMakeLists.txt`.
+- It assumes [`syfco`](https://github.com/gaperez64/syfco) is in your path and callable.
 
 Here is how `third_parties` look on my machine after downloading/installation of all dependencies:
 ```
@@ -48,5 +49,19 @@ You can run them with `-help` argument.
 Note: there are tests, but they require having TLSF-AIGER model checker.
 I use IIMC, `combine_aiger`, and this [script](https://gist.github.com/5nizza/14488e6fce0a29d297a38daefc95a1a8).
 See also `tests/tests_synt.cpp` for details.
+
+## SyntComp
+
+In synthesis competition 2023, there were benchmarks causing SPOT to throw the error message:
+```
+Too many acceptance sets used.  The limit is 32.
+```
+To ease the problem, increase the limit when compiling SPOT:
+```
+./configure --enable-max-accsets=128 --prefix /home/art/software/sdf-hoa-master/third_parties/spot-install-prefix --disable-devel
+make
+make install
+```
+The above limit of `128` results in much less number of such errors.
 
 🐾
