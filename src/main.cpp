@@ -47,7 +47,7 @@ int main(int argc, const char *argv[])
              "k",
              "the maximum number of times the same bad state can be visited "
              "(thus, it is reset between SCCs). "
-             "If you provide it twice (e.g. -k 1 -k 5), then I will try all values in that range. "
+             "If you provide it several times (e.g. -k 1 -k 4 -k 8), then I will try all those values in that order. "
              "Default: 4.",
              {'k'},
              {4});
@@ -116,11 +116,7 @@ int main(int argc, const char *argv[])
         "k: " << "[" << join(", ", k_list) << "], " <<
         "output_file: " << output_file_name);
 
-    vector<uint> k_to_iterate = (k_list.size() == 2?
-                                 range(k_list[0], k_list[1]+1):
-                                 (k_list.size()>2? k_list: range(k_list[0], k_list[0]+1)));
-
     return sdf::run_tlsf(SpecDescr(check_dual_spec, tlsf_file_name, !check_real_only, output_file_name),
-                         k_to_iterate);
+                         k_list);
 }
 
