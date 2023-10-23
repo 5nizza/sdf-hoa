@@ -48,7 +48,7 @@ sdf::parse_tlsf(const string& tlsf_file_name)
     int rc;
     string out, err;
 
-    tie(rc, out, err) = execute("syfco -f ltl -m fully " + tlsf_file_name);
+    tie(rc, out, err) = execute("syfco -f ltl -m fully -q double " + tlsf_file_name);
     MASSERT(rc == 0 && err.empty(),
             "syfco exited with non-zero status or non-empty stderr: \n" + to_str(rc, out, err) + "\nfile:" + tlsf_file_name);
 

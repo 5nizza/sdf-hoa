@@ -24,5 +24,6 @@ target_link_libraries(sdf-tlsf "${LIBS}")
 add_executable(sdf-hoa main_hoa.cpp $<TARGET_OBJECTS:sdf-object-library>)
 target_link_libraries(sdf-hoa "${LIBS}")
 
-# shared library
-add_library(${SDF_LIB_NAME} SHARED $<TARGET_OBJECTS:sdf-object-library>)
+# static library
+add_library(${SDF_LIB_NAME} STATIC $<TARGET_OBJECTS:sdf-object-library>)
+#add_library(${SDF_LIB_NAME} SHARED $<TARGET_OBJECTS:sdf-object-library>)
