@@ -161,9 +161,16 @@ bool sdf::synthesize_atm(const SpecDescr2<spot::twa_graph_ptr>& spec_descr,
 
         GameSolver solver(spec_descr.is_moore, spec_descr.inputs, spec_descr.outputs, k_aut, 3600);
         if (spec_descr.extract_model)
-            return (model = solver.synthesize())!=nullptr;
+        {
+            model = solver.synthesize();
+            if (model != nullptr)
+                return true;
+        }
         else
-            return solver.check_realizability();
+        {
+            if (solver.check_realizability())
+                return true;
+        }
     }
 
     return false;
