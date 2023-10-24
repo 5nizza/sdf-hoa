@@ -15,7 +15,7 @@ but make sure to modify the paths mentioned in `CmakeLists.txt`.
 - modified aiger-1.9.4, get it from [https://github.com/5nizza/aisy/tree/master/aiger_swig](https://github.com/5nizza/aisy/tree/master/aiger_swig)
 - cudd-3.0.0
 - spot-2.11.6
-- spdlog
+- spdlog-1.12.0
 - [pstreams](http://pstreams.sourceforge.net/), version 1.0.3
 - [args](https://github.com/Taywee/args): version 6.4.6
 - [googletest](https://github.com/google/googletest) version 1.14.0\
@@ -29,11 +29,10 @@ args-6.4.6
 cudd-3.0.0
 googletest-release-1.14.0
 pstreams-1.0.3
-spdlog/spdlog
+spdlog-1.12.0
 spot-2.11.6
 spot-install-prefix
 ```
-(you should have the folder `spdlog` with same-named folder `spdlog` inside)
 
 ## Build
 After downloading all the dependencies, building and installing spot, and building cudd, do:

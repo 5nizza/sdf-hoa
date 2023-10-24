@@ -22,14 +22,12 @@ extern "C"
 }
 
 #include <spdlog/spdlog.h>
+#include <spdlog/fmt/bundled/ostream.h>
 
 
 using namespace std;
 using namespace sdf;
 
-
-#define DEBUG(message) {spdlog::get("console")->debug() << message;}  // NOLINT(bugprone-macro-parentheses)
-#define INF(message) {spdlog::get("console")->info() << message;}     // NOLINT(bugprone-macro-parentheses)
 
 #define hset unordered_set
 
@@ -42,17 +40,18 @@ int sdf::run_hoa(const SpecDescr& spec_descr,
     // TODO: what happens when tlsf does have inputs/outputs but the formula doesn't mention them?
     //       (should still have it)
 
-    INF("\n" <<
-        "  hoa: " << spec_descr.file_name << "\n" <<
-        "  inputs: " << join(", ", inputs) << "\n" <<
-        "  outputs: " << join(", ", outputs) << "\n" <<
-        "  UCW atm size: " << aut->num_states() << "\n" <<
-        "  is_moore: " << is_moore);
+    spdlog::info("\n"
+        "  hoa: {}\n"
+        "  inputs: {}\n"
+        "  outputs: {}\n"
+        "  UCW atm size: {}\n"
+        "  is_moore: ",
+        spec_descr.file_name, join(", ", inputs), join(", ", outputs), aut->num_states(), is_moore);
 
     {   // debug
         stringstream ss;
         spot::print_dot(ss, aut);
-        DEBUG("\n" << ss.str());
+        spdlog::debug("\n{}", ss.str());
     }
 
     aiger* model;
@@ -70,7 +69,7 @@ int sdf::run_hoa(const SpecDescr& spec_descr,
     {
         if (!spec_descr.output_file_name.empty())
         {
-            INF("writing a model to " << spec_descr.output_file_name);
+            spdlog::info("writing a model to {}", spec_descr.output_file_name);
             int res = (spec_descr.output_file_name == "stdout") ?
                       aiger_write_to_file(model, aiger_ascii_mode, stdout):
                       aiger_open_and_write_to_file(model, spec_descr.output_file_name.c_str());
@@ -83,6 +82,8 @@ int sdf::run_hoa(const SpecDescr& spec_descr,
     return SYNTCOMP_RC_REAL;
 }
 
+template <> struct fmt::formatter<spot::formula> : ostream_formatter {};  // reason: to be able to pass to spdlog::info(..) the object of spot::formula which implements "<<"
+
 int sdf::run_tlsf(const SpecDescr& spec_descr,
                   const std::vector<uint>& k_to_iterate)
 {
@@ -94,13 +95,14 @@ int sdf::run_tlsf(const SpecDescr& spec_descr,
     // TODO: what happens when TLSF does have inputs/outputs but the formula doesn't mention them?
     //       (should still have it)
 
-    INF("\n" <<
-        "  tlsf: " << spec_descr.file_name << "\n" <<
-        "  formula: " << formula << "\n" <<
-        "  inputs: " << join(", ", inputs) << "\n" <<
-        "  outputs: " << join(", ", outputs) << "\n" <<
-        "  is_moore: " << is_moore);
-    INF("checking " << (spec_descr.check_unreal ? "UN" : "") << "realizability");
+    spdlog::info("\n"
+        "  tlsf: {}\n"
+        "  formula: {}\n"
+        "  inputs: {}\n"
+        "  outputs: {}\n"
+        "  is_moore: {}\n",
+        spec_descr.file_name, formula, join(", ", inputs), join(", ", outputs), is_moore);
+    spdlog::info("checking {}realizability", spec_descr.check_unreal ? "UN" : "");
 
     aiger* model;
     bool game_is_real;
@@ -117,7 +119,7 @@ int sdf::run_tlsf(const SpecDescr& spec_descr,
     // game is won by Eve, so the (original or dualized) spec is realizable
 
     if (spec_descr.check_unreal)
-        INF("(the game is won by Eve but the spec was dualized)");
+        spdlog::info("(the game is won by Eve but the spec was dualized)");
 
     cout << (spec_descr.check_unreal ? SYNTCOMP_STR_UNREAL : SYNTCOMP_STR_REAL) << endl;
 
@@ -125,7 +127,7 @@ int sdf::run_tlsf(const SpecDescr& spec_descr,
     {
         if (!spec_descr.output_file_name.empty())
         {
-            INF("writing a model to " << spec_descr.output_file_name);
+            spdlog::info("writing a model to {}", spec_descr.output_file_name);
             int res = (spec_descr.output_file_name == "stdout") ?
                       aiger_write_to_file(model, aiger_ascii_mode, stdout):
                       aiger_open_and_write_to_file(model, spec_descr.output_file_name.c_str());
@@ -144,19 +146,18 @@ bool sdf::synthesize_atm(const SpecDescr2<spot::twa_graph_ptr>& spec_descr,
 {
     for (auto k: k_to_iterate)
     {
-        INF("trying k = " << k);
+        spdlog::info("trying k = {}", k);
         auto k_aut = k_reduce(spec_descr.spec, k);
 
-        INF("automaton before iterative merging states/edges: "
-            << k_aut->num_states() << " states, "
-            << k_aut->num_edges() << " edges");
+        spdlog::info("automaton before iterative merging states/edges: {} states, {} edges", k_aut->num_states(), k_aut->num_edges());
+
         merge_atm(k_aut);
-        INF("merged k-automaton: " << k_aut->num_states() << " states, " << k_aut->num_edges() << " edges");
+        spdlog::info("merged k-automaton: {} states, {} edges", k_aut->num_states(), k_aut->num_edges());
 
         {   // debug
             stringstream ss;
             spot::print_dot(ss, k_aut);
-            DEBUG("\n" << ss.str());
+            spdlog::debug("\n{}", ss.str());
         }
 
         GameSolver solver(spec_descr.is_moore, spec_descr.inputs, spec_descr.outputs, k_aut, 3600);
@@ -192,13 +193,13 @@ bool sdf::synthesize_formula(const SpecDescr2<spot::formula>& spec_descr,
 
     Timer timer;
     spot::twa_graph_ptr aut = translator.run(neg_formula);
-    INF("LTL->UCW translation took (sec.): " << timer.sec_restart());
-    INF("UCW automaton size (states): " << aut->num_states());
+    spdlog::info("LTL->UCW translation took (sec.): {}", timer.sec_restart());
+    spdlog::info("UCW automaton size (states): {}", aut->num_states());
 
     {   // debug
         stringstream ss;
         spot::print_dot(ss, aut);
-        DEBUG("\n" << ss.str());
+        spdlog::debug("\n{}", ss.str());
     }
 
     return synthesize_atm(SpecDescr2(aut, spec_descr.inputs, spec_descr.outputs, spec_descr.is_moore, spec_descr.extract_model),

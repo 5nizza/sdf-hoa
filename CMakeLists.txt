@@ -25,7 +25,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3 -DNDEBUG")
 set(THIRD_PARTIES "${PROJECT_SOURCE_DIR}/third_parties")
 
 include_directories(src)
-include_directories("${THIRD_PARTIES}/spdlog/")
+include_directories("${THIRD_PARTIES}/spdlog-1.12.0/include/")
 include_directories("${THIRD_PARTIES}/aiger-1.9.4/")
 # for cudd, we need the mtr header, that is why we reference cudd using this hack
 # (instead of using expected `configure --prefix && make && make install`, which does not install the mtr header)

@@ -12,15 +12,8 @@ using namespace std;
 using namespace sdf;
 
 
-// TODO: this is ugly!
-#define DEBUG(message) spdlog::get("console")->debug()<<message
-#define INF(message) spdlog::get("console")->info()<<message
-
-
 int main(int argc, const char *argv[])
 {
-    auto logger = spdlog::get("console");
-
     args::ArgumentParser parser("Synthesizer from LTL (TLSF format)");
     parser.helpParams.width = 100;
     parser.helpParams.helpindent = 26;
@@ -99,6 +92,7 @@ int main(int argc, const char *argv[])
     }
 
     // setup logging
+    spdlog::set_pattern("%H:%M:%S %v ");
     if (silence_flag)
         spdlog::set_level(spdlog::level::off);
     if (verbose_flag)
@@ -111,10 +105,8 @@ int main(int argc, const char *argv[])
     bool check_dual_spec(check_dual_flag.Get());
     bool check_real_only(check_real_only_flag.Get());
 
-    INF("tlsf_file: " << tlsf_file_name << ", " <<
-        "check_dual_spec: " << check_dual_spec << ", " <<
-        "k: " << "[" << join(", ", k_list) << "], " <<
-        "output_file: " << output_file_name);
+    spdlog::info("tlsf_file: {}, check_dual_spec: {}, k: {}, output_file: {}",
+                 tlsf_file_name, check_dual_spec, join(", ", k_list), output_file_name);
 
     return sdf::run_tlsf(SpecDescr(check_dual_spec, tlsf_file_name, !check_real_only, output_file_name),
                          k_list);

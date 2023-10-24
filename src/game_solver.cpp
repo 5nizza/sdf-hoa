@@ -25,11 +25,8 @@ extern "C" {
 #define NEGATED(lit) (lit ^ 1)
 
 
-#define DEBUG(message) spdlog::get("console")->debug()<<message
-#define INF(message) spdlog::get("console")->info()<<message
-
-// TODO: use temporary object that logs time on destruction
-#define log_time(message) spdlog::get("console")->info() << message << " took (sec): " << timer.sec_restart()
+// TODO: use spdlog's stopwatch?
+#define log_time(message) spdlog::info("{} took (sec): {}", message, timer.sec_restart());
 
 
 using namespace std;
@@ -83,7 +80,7 @@ void sdf::GameSolver::build_error_bdd()
     // Assumptions:
     // - acceptance is state-based,
     // - state is accepting => state has a self-loop with true.
-    INF("build_error_bdd..");
+    spdlog::info("build_error_bdd..");
 
     MASSERT(aut->is_sba() == spot::trival::yes_value, "is the automaton with Buchi-state acceptance?");
     MASSERT(aut->prop_terminal() == spot::trival::yes_value, "is the automaton terminal?");
@@ -99,7 +96,7 @@ void sdf::GameSolver::build_error_bdd()
 
 void sdf::GameSolver::build_init_state_bdd()
 {
-    INF("build_init_state_bdd..");
+    spdlog::info("build_init_state_bdd..");
 
     // Initial state is 'the latch of the initial state is 1, others are 0'
     // (there is only one initial state)
@@ -162,7 +159,7 @@ BDD translate_formula_into_cuddBDD(const spot::formula& formula,
 void sdf::GameSolver::build_pre_trans_func()
 {
     // This function ensures: for each state, cuddIdx = state+NOF_SIGNALS
-    INF("build_pre_trans_func..");
+    spdlog::info("build_pre_trans_func..");
 
     const spot::bdd_dict_ptr& spot_bdd_dict = aut->get_dict();
 
@@ -174,7 +171,8 @@ void sdf::GameSolver::build_pre_trans_func()
             if (ap != aut->ap().back())
                 ss << ", ";
         }
-        DEBUG("Atomic propositions explicitly used by the automaton (" << aut->ap().size() << "): " << ss.str());
+        spdlog::debug("Atomic propositions explicitly used by the automaton ({}):{}",
+                      aut->ap().size(), ss.str());
     }
 
     // assumption: in the automaton, states are numbered from 0 to n-1
@@ -324,7 +322,7 @@ uint get_var_of_min_order_position(Cudd& cudd, const SetUint& group)
 
 void introduce_group_into_cudd(Cudd &cudd, const SetUint& group)
 {
-    INF("adding variable group to cudd: " << string_set(group));
+    spdlog::info("adding variable group to cudd: {}", string_set(group));
     uint first_var_pos = get_var_of_min_order_position(cudd, group);
     cudd.MakeTreeNode(first_var_pos, (uint) group.size(), MTR_FIXED);
 }
@@ -335,7 +333,8 @@ void _do_grouping(Cudd &cudd,
                   uint cur_group_length,
                   const VecUint& cur_order)
 {
-    INF("fixing groups of size " << cur_group_length << ". The number of groups = " << groups_by_length[cur_group_length].size());
+    spdlog::info("fixing groups of size {}. The number of groups = {}.",
+                 cur_group_length, groups_by_length[cur_group_length].size());
 
     auto cur_groups = groups_by_length[cur_group_length];
 
@@ -358,7 +357,7 @@ void _do_grouping(Cudd &cudd,
 void do_grouping(Cudd& cudd,
                  const vector<VecUint>& orders)
 {
-    INF("trying to group vars..");
+    spdlog::info("trying to group vars..");
 
     if (orders.empty() || orders[0].size() < 5)  // window size is too big
         return;
@@ -369,16 +368,16 @@ void do_grouping(Cudd& cudd,
     groups_by_length[4] = get_group_candidates(orders, 4);
     groups_by_length[5] = get_group_candidates(orders, 5);
 
-    INF("# of group candidates: of size 2 -- " << groups_by_length[2].size());
+    spdlog::info("# of group candidates: of size 2 -- ", groups_by_length[2].size());
     for (auto const& g : groups_by_length[2])
-        INF(string_set(g));
+        spdlog::info(string_set(g));
 
-    INF("# of group candidates: of size 3 -- " << groups_by_length[3].size());
+    spdlog::info("# of group candidates: of size 3 -- {}", groups_by_length[3].size());
     for (auto const& g : groups_by_length[3])
-        INF(string_set(g));
+        spdlog::info(string_set(g));
 
-    INF("# of group candidates: of size 4 -- " << groups_by_length[4].size());
-    INF("# of group candidates: of size 5 -- " << groups_by_length[5].size());
+    spdlog::info("# of group candidates: of size 4 -- ", groups_by_length[4].size());
+    spdlog::info("# of group candidates: of size 5 -- ", groups_by_length[5].size());
 
     auto cur_order = orders.back();    // we fix only groups present in the current order (because that is easier to implement)
 
@@ -486,7 +485,8 @@ BDD sdf::GameSolver::calc_win_region()
     BDD new_ = cudd.bddOne();
     for (uint i = 1; ; ++i)
     {
-        INF("calc_win_region: iteration " << i << ": node count " << cudd.ReadNodeCount());
+        spdlog::info("calc_win_region: iteration {}: node count {}",
+                     i, cudd.ReadNodeCount());
 
         BDD curr = new_;
 
@@ -519,7 +519,7 @@ BDD sdf::GameSolver::calc_win_region()
  */
 BDD sdf::GameSolver::get_nondet_strategy()
 {
-    INF("get_nondet_strategy..");
+    spdlog::info("get_nondet_strategy..");
 
     // TODO: which produces smaller circuits?
     return ~error & win_region & win_region.VectorCompose(get_substitution());
@@ -540,7 +540,7 @@ hmap<uint,BDD> sdf::GameSolver::extract_output_funcs()
      *     ...
      */
 
-    INF("extract_output_funcs..");
+    spdlog::info("extract_output_funcs..");
 
     cudd.FreeTree();  // ordering that worked for win region computation might not work here
 
@@ -553,7 +553,7 @@ hmap<uint,BDD> sdf::GameSolver::extract_output_funcs()
         BDD c = controls.back(); controls.pop_back();
 
         auto c_name = inputs_outputs[c.NodeReadIndex()].ap_name();
-        INF("extracting BDD model for " << c_name << "...");
+        spdlog::info("extracting BDD model for {}...", c_name);
 //        dumpBddAsDot(cudd, c, c_name);
 
         BDD c_arena;
@@ -696,7 +696,7 @@ aiger* sdf::GameSolver::synthesize()
 
     model_to_aiger();
     log_time("model_to_aiger");
-    INF("circuit size: " << (aiger_lib->num_ands + aiger_lib->num_latches));
+    spdlog::info("circuit size: {}", (aiger_lib->num_ands + aiger_lib->num_latches));
 
     return aiger_lib;
 }

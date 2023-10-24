@@ -12,15 +12,8 @@ using namespace std;
 using namespace sdf;
 
 
-// TODO: this is ugly!
-#define DEBUG(message) spdlog::get("console")->debug()<<message
-#define INF(message) spdlog::get("console")->info()<<message
-
-
 int main(int argc, const char *argv[])
 {
-    auto logger = spdlog::get("console");
-
     args::ArgumentParser parser("Synthesizer from UCW (HOA format)");
     parser.helpParams.width = 100;
     parser.helpParams.helpindent = 26;
@@ -92,7 +85,9 @@ int main(int argc, const char *argv[])
         return 1;
     }
 
+    // TODO: replace default logger: disable colors
     // setup logging
+    spdlog::set_pattern("%H:%M:%S %v ");
     if (silence_flag)
         spdlog::set_level(spdlog::level::off);
     if (verbose_flag)
@@ -104,9 +99,8 @@ int main(int argc, const char *argv[])
     vector<uint> k_list(k_list_arg.Get());
     bool check_real_only(check_real_only_flag.Get());
 
-    INF("hoa_file: " << hoa_file_name << ", " <<
-        "k: " << "[" << join(", ", k_list) << "], " <<
-        "output_file: " << output_file_name);
+    spdlog::info("hoa_file: {}, k: {}, output_file: {}",
+                 hoa_file_name, join(", ", k_list), output_file_name);
 
     return sdf::run_hoa(SpecDescr(false, hoa_file_name, !check_real_only, output_file_name), k_list);
 }

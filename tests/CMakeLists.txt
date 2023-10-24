@@ -7,7 +7,7 @@ project(sdf-tests)
 
 #add_subdirectory("${THIRD_PARTIES}/googletest-release-1.10.0")
 
-include_directories("${THIRD_PARTIES}/googletest-release-1.10.0/googletest/include" "${THIRD_PARTIES}/googletest-release-1.10.0/googletest")
+include_directories("${THIRD_PARTIES}/googletest-release-1.14.0/googletest/include" "${THIRD_PARTIES}/googletest-release-1.14.0/googletest")
 
 add_executable(test_synt tests_synt.cpp)
 target_link_libraries(test_synt "${SDF_LIB_NAME}" "${LIBS}" gtest gtest_main)
