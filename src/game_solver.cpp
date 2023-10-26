@@ -1,7 +1,4 @@
 #include <iostream>
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
 #include <algorithm>
 #include <spdlog/spdlog.h>
 
@@ -33,8 +30,6 @@ using namespace std;
 
 
 #define hmap unordered_map
-typedef vector<uint> VecUint;
-typedef unordered_set<uint> SetUint;
 
 
 vector<BDD> sdf::GameSolver::get_controllable_vars_bdds()
@@ -234,170 +229,6 @@ vector<string> split(const string &s, char delim)
 }
 
 
-VecUint get_order(Cudd &cudd)
-{
-    VecUint order;
-    for (uint i = 0; i < (uint)cudd.ReadSize(); ++i)
-        order.push_back(cudd.ReadInvPerm(i));
-    return order;
-}
-
-string string_set(const SetUint& v)
-{
-    stringstream ss;
-    for(auto const el : v)
-        ss << el << ",";
-    return ss.str();
-}
-
-template<typename Container>
-struct container_hash
-{
-    std::size_t operator()(Container const & v) const
-    {
-        size_t hash = 0;
-        for (auto const el: v)
-            hash ^= el;
-        return hash;
-    }
-};
-
-
-bool do_intersect(const SetUint& s1, const SetUint& s2)
-{
-    for (auto el1 : s1)
-        if (s2.find(el1) != s2.end())
-            return true;
-    return false;
-}
-
-
-vector<SetUint>
-get_group_candidates(const vector<VecUint>& orders,
-                     uint window_size)
-{
-    hmap<SetUint, uint, container_hash<SetUint>>
-            group_freq;
-
-    for (auto const & order : orders)
-        for (uint idx=0; idx < order.size() - window_size; ++idx)
-        {
-            SetUint sub_group(order.begin() + idx,
-                              order.begin() + idx + window_size);
-            ++group_freq[sub_group];
-        }
-
-    vector<SetUint> candidates;
-    for (auto const & it: group_freq)
-        if (((float)it.second/orders.size()) >= 0.8)  // appears 'often'
-            candidates.push_back(it.first);
-    return candidates;
-}
-
-
-void remove_intersecting(const SetUint& group,
-                         vector<SetUint>& groups)
-{
-    auto it = groups.begin();
-    while (it != groups.end())
-        if (do_intersect(group, *it))
-            it = groups.erase(it);
-        else
-            ++it;
-}
-
-
-uint get_var_of_min_order_position(Cudd& cudd, const SetUint& group)
-{
-    uint min_var = *group.begin();
-    uint min_pos = (uint)cudd.ReadPerm(min_var);
-    for (auto const var : group)
-        if ((uint)cudd.ReadPerm(var) < min_pos) {
-            min_var = var;
-            min_pos = (uint)cudd.ReadPerm(var);
-        }
-    return min_var;
-}
-
-
-void introduce_group_into_cudd(Cudd &cudd, const SetUint& group)
-{
-    spdlog::info("adding variable group to cudd: {}", string_set(group));
-    uint first_var_pos = get_var_of_min_order_position(cudd, group);
-    cudd.MakeTreeNode(first_var_pos, (uint) group.size(), MTR_FIXED);
-}
-
-
-void _do_grouping(Cudd &cudd,
-                  hmap<uint, vector<SetUint>>& groups_by_length,  // we modify its values
-                  uint cur_group_length,
-                  const VecUint& cur_order)
-{
-    spdlog::info("fixing groups of size {}. The number of groups = {}.",
-                 cur_group_length, groups_by_length[cur_group_length].size());
-
-    auto cur_groups = groups_by_length[cur_group_length];
-
-    for (uint i = 0; i+cur_group_length < cur_order.size(); ++i)
-    {
-        SetUint candidate;
-        for (uint j = 0; j < cur_group_length; ++j)
-            candidate.insert(cur_order[i+j]);
-
-        if (find(cur_groups.begin(), cur_groups.end(), candidate) != cur_groups.end())
-        {
-            for (uint l = 2; l < cur_group_length; ++l)
-                remove_intersecting(candidate, groups_by_length[l]);  //remove from smaller groups
-            introduce_group_into_cudd(cudd, candidate);
-        }
-    }
-}
-
-
-void do_grouping(Cudd& cudd,
-                 const vector<VecUint>& orders)
-{
-    spdlog::info("trying to group vars..");
-
-    if (orders.empty() || orders[0].size() < 5)  // window size is too big
-        return;
-
-    hmap<uint, vector<SetUint>> groups_by_length;
-    groups_by_length[2] = get_group_candidates(orders, 2);
-    groups_by_length[3] = get_group_candidates(orders, 3);
-    groups_by_length[4] = get_group_candidates(orders, 4);
-    groups_by_length[5] = get_group_candidates(orders, 5);
-
-    spdlog::info("# of group candidates: of size 2 -- ", groups_by_length[2].size());
-    for (auto const& g : groups_by_length[2])
-        spdlog::info(string_set(g));
-
-    spdlog::info("# of group candidates: of size 3 -- {}", groups_by_length[3].size());
-    for (auto const& g : groups_by_length[3])
-        spdlog::info(string_set(g));
-
-    spdlog::info("# of group candidates: of size 4 -- ", groups_by_length[4].size());
-    spdlog::info("# of group candidates: of size 5 -- ", groups_by_length[5].size());
-
-    auto cur_order = orders.back();    // we fix only groups present in the current order (because that is easier to implement)
-
-    for (uint i = 5; i>=2; --i)  // decreasing order!
-        if (!groups_by_length[i].empty())
-            _do_grouping(cudd, groups_by_length, i, cur_order);
-}
-
-
-void update_order_if(Cudd& cudd, vector<VecUint>& orders)
-{
-    static uint last_nof_orderings = 0;  // FIXME: get rid of static variables!!!
-
-    if (last_nof_orderings != cudd.ReadReorderings())
-        orders.push_back(get_order(cudd));
-
-    last_nof_orderings = cudd.ReadReorderings();
-}
-
-
 BDD sdf::GameSolver::pre_sys(BDD dst) {
     /**
     Calculate predecessor states of given states.
@@ -420,18 +251,9 @@ BDD sdf::GameSolver::pre_sys(BDD dst) {
     // NOTE: I tried considering two special cases: error(t,u,c) and error(t),
     //       and move error(t) outside of quantification ∀u ∃c.
     //       It slowed down..
-    // TODO: try again: on the driver example
+    // TODO: try again and test on benchmarks
 
-    static vector<VecUint> orders;  // FIXME: get rid of static variables!!!
-    static bool did_grouping = false;
-
-    if (!did_grouping && timer.sec_from_origin() > time_limit_sec/4)  // TODO: prove it works or remove
-    {   // at 0.25*time_limit we fix the order
-        do_grouping(cudd, orders);
-        did_grouping = true;
-    }
-
-    dst = dst.VectorCompose(get_substitution());                            update_order_if(cudd, orders);
+    dst = dst.VectorCompose(get_substitution());
 
     if (is_moore)  // we use this for checking unrealizability (i.e. realizability by env of the dual spec)
     {
@@ -443,7 +265,7 @@ BDD sdf::GameSolver::pre_sys(BDD dst) {
             BDD uncontrollable_cube = cudd.bddComputeCube(uncontrollable.data(),
                                                           nullptr,
                                                           (int)uncontrollable.size());
-            result = result.UnivAbstract(uncontrollable_cube);                 update_order_if(cudd, orders);
+            result = result.UnivAbstract(uncontrollable_cube);
         }
 
         // ∃c ∀u  (...)
@@ -451,7 +273,7 @@ BDD sdf::GameSolver::pre_sys(BDD dst) {
         BDD controllable_cube = cudd.bddComputeCube(controllable.data(),
                                                     nullptr,
                                                     (int)controllable.size());
-        result = result.ExistAbstract(controllable_cube);                      update_order_if(cudd, orders);
+        result = result.ExistAbstract(controllable_cube);
         return result;
     }
 
@@ -460,7 +282,7 @@ BDD sdf::GameSolver::pre_sys(BDD dst) {
     BDD controllable_cube = cudd.bddComputeCube(controllable.data(),
                                                 nullptr,
                                                 (int)controllable.size());
-    BDD result = dst.AndAbstract(~error, controllable_cube);                   update_order_if(cudd, orders);
+    BDD result = dst.AndAbstract(~error, controllable_cube);
 
     vector<BDD> uncontrollable = get_uncontrollable_vars_bdds();
     if (!uncontrollable.empty())
@@ -469,7 +291,7 @@ BDD sdf::GameSolver::pre_sys(BDD dst) {
         BDD uncontrollable_cube = cudd.bddComputeCube(uncontrollable.data(),
                                                       nullptr,
                                                       (int)uncontrollable.size());
-        result = result.UnivAbstract(uncontrollable_cube);                     update_order_if(cudd, orders);
+        result = result.UnivAbstract(uncontrollable_cube);
     }
     return result;
 }
