@@ -1,9 +1,9 @@
 # sdf-hoa
 
-The synthesis tool takes as input a TLSF file
+The synthesis tool takes as input a TLSF or extended HOA file
 and outputs `REALIZABLE` or `UNREALIZABLE`, and an AIGER model.
 A brief description is available in the SYNTCOMP report
-[https://arxiv.org/pdf/2206.00251.pdf](https://arxiv.org/pdf/2206.00251.pdf),
+[https://arxiv.org/pdf/2206.00251.pdf](https://arxiv.org/pdf/2206.00251.pdf);
 the tool re-invents the ideas of Ruediger Ehlers of the [symbolic bounded synthesis](https://ruediger-ehlers.de/papers/fmsd2012.pdf).
 
 
