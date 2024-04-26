@@ -192,6 +192,7 @@ void sdf::GameSolver::build_pre_trans_func()
         pre_trans_func[s + NOF_SIGNALS] = s_transitions;
 
 //        dumpBddAsDot(cudd, s_transitions, "s" + to_string(s));
+
     }
 }
 
@@ -343,7 +344,7 @@ BDD sdf::GameSolver::get_nondet_strategy()
 {
     spdlog::info("get_nondet_strategy..");
 
-    // TODO: which produces smaller circuits?
+    // this version results in smaller BDD-count numbers
     return ~error & win_region & win_region.VectorCompose(get_substitution());
 //    return ~win_region | (~error & win_region.VectorCompose(get_substitution()));
 }
@@ -441,7 +442,7 @@ void init_cudd(Cudd& cudd)
 {
 //    cudd.Srandom(827464282);  // for reproducibility
     cudd.AutodynEnable(CUDD_REORDER_SIFT);
-//    cudd.EnableReorderingReporting();
+//    cudd.EnableReorderingReporting();  // TODO: AK: remove: temporarily
 }
 
 
@@ -482,28 +483,31 @@ bool sdf::GameSolver::check_realizability()
 aiger* sdf::GameSolver::synthesize()
 {
     if (!check_realizability())
+    {
+        spdlog::info("BDD node count after check_realizability: {}", cudd.ReadNodeCount());
         return nullptr;
+    }
 
     // now we have win_region and compute a nondet strategy
+    
+    cudd.AutodynDisable();  // disabling re-ordering greatly helps on some examples (arbiter, load_balancer), but on others (prioritised_arbiter) it worsens things.
 
-    cudd.AutodynDisable();  // TODO: disabling re-ordering greatly helps on some examples (load_balancer, lift(?)), but on others (prioritised_arbiter) it worsens things.
-
-    non_det_strategy = get_nondet_strategy();
-
+    non_det_strategy = get_nondet_strategy();    // note: this introduces a really lot of BDD nodes
     log_time("get_nondet_strategy");
+    spdlog::info("BDD node count after get_nondet_strategy: {}", cudd.ReadNodeCount());
 
     // cleaning non-used BDDs
     init = error = win_region = cudd.bddZero();
-    // we can't clear pre_trans_func bc we use it to define how latches (states) evolve in the impl
+    // we can't clear pre_trans_func bc we use it to define how latches (states) evolve in the impl (note: compared to output functions, pre_trans_func is small)
 
-    /// FUTURE: set time limit on reordering? or even disable it if there is not enough time?
     outModel_by_cuddIdx = extract_output_funcs();
     log_time("extract_output_funcs");
+    spdlog::info("BDD node count after extract_output_funcs: {}", cudd.ReadNodeCount());
 
     // cleaning non-used BDDs
     non_det_strategy = cudd.bddZero();
-    /// FUTURE: we could also clear variables of trans_func that are not used in the model
 
+    spdlog::info("BDD node count of det strategy: {}", cudd.ReadNodeCount());
     auto elapsed_sec = time_limit_sec - timer.sec_from_origin();
     if (elapsed_sec > 100)
     {   // leave 100sec for writing to AIGER
@@ -515,6 +519,7 @@ aiger* sdf::GameSolver::synthesize()
         cudd.AutodynDisable();  // just in case -- cudd hangs on timeout
     }
     log_time("reordering before aigerizing");
+    spdlog::info("BDD node count of det strategy after reordering: {}", cudd.ReadNodeCount());
 
     model_to_aiger();
     log_time("model_to_aiger");
