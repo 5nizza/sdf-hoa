@@ -29,6 +29,13 @@ int main(int argc, const char *argv[])
              "do not extract the model (check realizability only)",
              {'r', "real"});
 
+    args::Flag do_reach_optim_flag
+            (parser,
+             "ra",
+             "do reachability-analysis optimization during strategy determinisation (expensive);"
+             "automatically disabled when the number of states in the safety automaton > " + to_string(R_OPTIM_BOUND),
+             {'a', "ra"});
+
     args::ValueFlagList<uint> k_list_arg
             (parser,
              "k",
@@ -85,7 +92,6 @@ int main(int argc, const char *argv[])
         return 1;
     }
 
-    // TODO: replace default logger: disable colors
     // setup logging
     spdlog::set_pattern("%H:%M:%S %v ");
     if (silence_flag)
@@ -98,10 +104,18 @@ int main(int argc, const char *argv[])
     string output_file_name(output_name ? output_name.Get() : "stdout");
     vector<uint> k_list(k_list_arg.Get());
     bool check_real_only(check_real_only_flag.Get());
+    bool do_reach_analysis(do_reach_optim_flag.Get());
+
+    if (do_reach_analysis && check_real_only)
+    {
+        spdlog::warn("reachability-analysis optimization"
+                     "will be ignored because of the flag check_real_only");
+        do_reach_analysis = false;
+    }
 
     spdlog::info("hoa_file: {}, k: {}, output_file: {}",
                  hoa_file_name, join(", ", k_list), output_file_name);
 
-    return sdf::run_hoa(SpecDescr(false, hoa_file_name, !check_real_only, output_file_name), k_list);
+    return sdf::run_hoa(SpecDescr(false, hoa_file_name, !check_real_only, do_reach_analysis, output_file_name), k_list);
 }
 

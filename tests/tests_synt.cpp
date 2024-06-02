@@ -51,11 +51,13 @@ const vector<SpecParam> specs =
     SpecParam("simple_arbiter.tlsf", true),
     SpecParam("simple_arbiter_3.tlsf", true),
     SpecParam("detector.tlsf", true),
+    SpecParam("arbiter.tlsf", true),
     SpecParam("full_arbiter.tlsf", true),
     SpecParam("load_balancer.tlsf", true),
     SpecParam("round_robin_arbiter.tlsf", true),
     SpecParam("round_robin_arbiter2.tlsf", true),
     SpecParam("prioritized_arbiter.tlsf", true),
+    SpecParam("lift_gr1+.tlsf", true),
     SpecParam("mealy_moore_real.tlsf", true),
 
     SpecParam("testing_unknown_APs.tlsf", true),
@@ -99,9 +101,11 @@ const vector<string> specs_for_mc =
     "simple_arbiter_3.tlsf",
     "detector.tlsf",
     "full_arbiter.tlsf",
+    "arbiter.tlsf",
     "load_balancer.tlsf",
     "round_robin_arbiter.tlsf",
-//    "round_robin_arbiter2.tlsf",  // MC takes 4s
+//    "lift_gr1+.tlsf",             // MC takes a long time
+//    "round_robin_arbiter2.tlsf",  // MC takes a long time
     "prioritized_arbiter.tlsf",
     "mealy_moore_real.tlsf",
     "outputs_only.tlsf"
@@ -125,13 +129,12 @@ public:
     }
 };
 
-TEST_P(SyntWithMCFixture, synt_and_verify)
+void synt_and_verify_common(const string& spec, const string& tmpFolder, bool reach_optimisation)
 {
-    auto spec = GetParam();
     auto specPath = "./specs/" + spec;
     auto modelPath = tmpFolder + "/" + spec + ".aag";
     cout << "(TEST) SYNTHESIS..." << endl;
-    auto status = run_tlsf(SpecDescr(false, specPath, true, modelPath), {2});
+    auto status = run_tlsf(SpecDescr(false, specPath, true, reach_optimisation, modelPath), {2,4});
     ASSERT_EQ(SYNTCOMP_RC_REAL, status);
     cout << "(TEST) SYNTHESIS: SUCCESS!" << endl;
 
@@ -149,6 +152,16 @@ TEST_P(SyntWithMCFixture, synt_and_verify)
 
     cout << out << endl;
     cout << "(TEST) VERIFICATION: SUCCESS!" << endl;
+}
+
+TEST_P(SyntWithMCFixture, synt_and_verify)
+{
+    synt_and_verify_common(GetParam(), tmpFolder, false);
+}
+
+TEST_P(SyntWithMCFixture, synt_and_verify_optim)
+{
+    synt_and_verify_common(GetParam(), tmpFolder, true);
 }
 
 INSTANTIATE_TEST_SUITE_P(SyntWithMC,

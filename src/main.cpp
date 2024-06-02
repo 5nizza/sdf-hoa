@@ -35,6 +35,13 @@ int main(int argc, const char *argv[])
              "do not extract the model (check realizability only)",
              {'r', "real"});
 
+    args::Flag do_reach_optim_flag
+            (parser,
+             "ra",
+             "do reachability-analysis optimization during strategy determinisation (expensive);"
+             "automatically disabled when the number of states in the safety automaton > " + to_string(R_OPTIM_BOUND),
+             {'a', "ra"});
+
     args::ValueFlagList<uint> k_list_arg
             (parser,
              "k",
@@ -104,11 +111,19 @@ int main(int argc, const char *argv[])
     vector<uint> k_list(k_list_arg.Get());
     bool check_dual_spec(check_dual_flag.Get());
     bool check_real_only(check_real_only_flag.Get());
+    bool do_reach_analysis(do_reach_optim_flag.Get());
+
+    if (do_reach_analysis && (check_dual_spec || check_real_only))
+    {
+        spdlog::warn("reachability-analysis optimization"
+                     "will be ignored because of the flag (check_dual_spec || check_real_only)");
+        do_reach_analysis = false;
+    }
 
     spdlog::info("tlsf_file: {}, check_dual_spec: {}, k: {}, output_file: {}",
                  tlsf_file_name, check_dual_spec, join(", ", k_list), output_file_name);
 
-    return sdf::run_tlsf(SpecDescr(check_dual_spec, tlsf_file_name, !check_real_only, output_file_name),
+    return sdf::run_tlsf(SpecDescr(check_dual_spec, tlsf_file_name, !check_real_only, do_reach_analysis, output_file_name),
                          k_list);
 }
 

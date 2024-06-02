@@ -17,21 +17,26 @@ extern "C"
 namespace sdf
 {
 
+const uint R_OPTIM_BOUND = 120;  // reachability-analysis optimization is disabled when the number of states in the safety automaton exceeds this number
+
 struct SpecDescr
 {
     const bool check_unreal;
     const std::string& file_name;
     const bool extract_model;
+    const bool do_reach_optim;
     const std::string& output_file_name;
 
     SpecDescr(bool checkUnreal,
               const std::string& fileName,
               bool extractModel = false,
+              bool do_reach_optim = false,
               const std::string& outputFileName = "") :
-              check_unreal(checkUnreal),
-              file_name(fileName),
-              extract_model(extractModel),
-              output_file_name(outputFileName) {}
+            check_unreal(checkUnreal),
+            file_name(fileName),
+            extract_model(extractModel),
+            do_reach_optim(do_reach_optim),
+            output_file_name(outputFileName) {}
 };
 
 /**
@@ -58,16 +63,19 @@ struct SpecDescr2
     const std::unordered_set<spot::formula>& outputs;
     const bool is_moore;
     const bool extract_model;
+    const bool do_reach_optim;
 
     SpecDescr2(const T& spec,
               const std::unordered_set<spot::formula>& inputs,
               const std::unordered_set<spot::formula>& outputs,
               bool isMoore,
-              bool extractModel) :
+              bool extractModel,
+              bool do_reach_optim) :
             spec(spec),
             inputs(inputs), outputs(outputs),
             is_moore(isMoore),
-            extract_model(extractModel) {}
+            extract_model(extractModel),
+            do_reach_optim(do_reach_optim) {}
 };
 
 /**

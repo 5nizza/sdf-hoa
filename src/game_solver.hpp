@@ -39,12 +39,14 @@ public:
                const std::unordered_set<spot::formula>& inputs_,
                const std::unordered_set<spot::formula>& outputs_,
                const spot::twa_graph_ptr& aut_,
+               const bool do_reach_optim,
                uint time_limit_sec_ = 3600) :
         is_moore(is_moore_),
         inputs(inputs_.begin(), inputs_.end()),
         outputs(outputs_.begin(), outputs_.end()),
         NOF_SIGNALS(inputs.size()+outputs.size()),
         aut(aut_),
+        do_reach_optim(do_reach_optim),
         time_limit_sec(time_limit_sec_)
     {
         inputs_outputs.insert(inputs_outputs.end(), inputs.begin(), inputs.end());      // NB: inputs, not inputs_
@@ -73,6 +75,7 @@ private:
     /*const*/ std::vector<spot::formula> inputs_outputs; // (ordered)
     const uint NOF_SIGNALS;
     spot::twa_graph_ptr aut; // TODO: make const
+    const bool do_reach_optim;
 
     const uint time_limit_sec;
 
@@ -88,7 +91,7 @@ private:
     std::unordered_map<uint, BDD> outModel_by_cuddIdx;
 
 private:
-    aiger* aiger_lib = nullptr;  // TODO: don't keep it in the internal state
+    aiger* aiger_lib = nullptr;
     uint next_lit = 2;  // next available literal to be used in aiger; incremented by 2
     std::unordered_map<uint, uint> aiger_by_cudd;   // mapping from cudd indexes to aiger stripped literals
     std::unordered_map<DdNode*, uint> cache;        // used in AIGER model construction
@@ -126,6 +129,10 @@ private:
         next_lit += 2;
         return curr;
     }
+
+    BDD compute_reachable(const BDD& T);
+
+    BDD compute_monolithic_T();
 };
 
 

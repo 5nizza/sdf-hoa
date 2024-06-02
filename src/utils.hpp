@@ -138,6 +138,14 @@ std::string lower(const std::string& what)
     return result;
 }
 
+template<typename T>
+inline
+std::string to_string(const T& obj)
+{
+    std::stringstream ss;
+    ss << obj;
+    return ss.str();
+}
 
 template<typename ... Args>
 inline
@@ -242,6 +250,15 @@ a_intersection_b(const Container& a, const Container& b)
     for (const auto& x : a)
         if (b.find(x) != b.end())
             result.insert(x);
+    return result;
+}
+
+template<typename T>
+std::vector<T>
+a_union_b(const std::vector<T>& a, const std::vector<T>& b)
+{
+    std::vector<T> result = a;  // copy
+    result.insert(result.end(), b.begin(), b.end());
     return result;
 }
 

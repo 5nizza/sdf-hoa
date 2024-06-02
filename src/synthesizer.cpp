@@ -55,7 +55,7 @@ int sdf::run_hoa(const SpecDescr& spec_descr,
     }
 
     aiger* model;
-    bool game_is_real = synthesize_atm(SpecDescr2(aut, inputs, outputs, is_moore, spec_descr.extract_model), k_to_iterate, model);
+    bool game_is_real = synthesize_atm(SpecDescr2(aut, inputs, outputs, is_moore, spec_descr.extract_model, spec_descr.do_reach_optim), k_to_iterate, model);
 
     if (!game_is_real)
     {   // game is won by Adam, but it does not mean the invoked spec is unrealizable (due to k-reduction)
@@ -107,8 +107,8 @@ int sdf::run_tlsf(const SpecDescr& spec_descr,
     aiger* model;
     bool game_is_real;
     game_is_real = spec_descr.check_unreal?
-            synthesize_formula(SpecDescr2(spot::formula::Not(formula), outputs, inputs, !is_moore, spec_descr.extract_model), k_to_iterate, model):
-            synthesize_formula(SpecDescr2(formula, inputs, outputs, is_moore, spec_descr.extract_model), k_to_iterate, model);
+            synthesize_formula(SpecDescr2(spot::formula::Not(formula), outputs, inputs, !is_moore, spec_descr.extract_model, spec_descr.do_reach_optim), k_to_iterate, model):
+            synthesize_formula(SpecDescr2(formula, inputs, outputs, is_moore, spec_descr.extract_model, spec_descr.do_reach_optim), k_to_iterate, model);
 
     if (!game_is_real)
     {   // game is won by Adam, but it does not mean the invoked spec is unrealizable (due to k-reduction)
@@ -160,7 +160,9 @@ bool sdf::synthesize_atm(const SpecDescr2<spot::twa_graph_ptr>& spec_descr,
             spdlog::debug("\n{}", ss.str());
         }
 
-        GameSolver solver(spec_descr.is_moore, spec_descr.inputs, spec_descr.outputs, k_aut, 3600);
+        GameSolver solver(spec_descr.is_moore, spec_descr.inputs, spec_descr.outputs, k_aut,
+                          spec_descr.do_reach_optim && (k_aut->num_states()<=R_OPTIM_BOUND),
+                          3600);
         if (spec_descr.extract_model)
         {
             model = solver.synthesize();
@@ -202,7 +204,7 @@ bool sdf::synthesize_formula(const SpecDescr2<spot::formula>& spec_descr,
         spdlog::debug("\n{}", ss.str());
     }
 
-    return synthesize_atm(SpecDescr2(aut, spec_descr.inputs, spec_descr.outputs, spec_descr.is_moore, spec_descr.extract_model),
+    return synthesize_atm(SpecDescr2(aut, spec_descr.inputs, spec_descr.outputs, spec_descr.is_moore, spec_descr.extract_model, spec_descr.do_reach_optim),
                           k_to_iterate,
                           model);
 }

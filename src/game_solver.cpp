@@ -55,6 +55,7 @@ void dumpBddAsDot(Cudd& cudd, const BDD& model, const string& name)
 {
     const char* inames[cudd.ReadSize()];
     string inames_str[cudd.ReadSize()];  // we have to store those strings for the time DumpDot is operating
+
     for (uint i = 0; i < (uint)cudd.ReadSize(); ++i)
     {
         inames_str[i] = cudd.getVariableName(i);
@@ -230,34 +231,33 @@ vector<string> split(const string &s, char delim)
 }
 
 
-BDD sdf::GameSolver::pre_sys(BDD dst) {
+BDD sdf::GameSolver::pre_sys(BDD dst)
+{
+    //TODO: add support for empty controllable (model checking)
+
     /**
     Calculate predecessor states of given states.
 
-        ∀u ∃c ∃t': tau(t,u,c,t') & dst(t') & ~error(t,u,c)
-
-    We use the direct substitution optimization (since t' <-> BDD(t,u,c)), thus:
-
-        ∀u ∃c: (!error(t,u,c)  &  (dst(t)[t <- bdd_next_t(t,u,c)]))
+        ∀u ∃c: dst(t)[t <- bdd_pred(t,u,c)] & !error(t,u,c)
 
     or for Moore machines:
 
-        ∃c ∀u: (!error(t,u,c)  &  (dst(t)[t <- bdd_next_t(t,u,c)]))
-
-    Note that we do not replace t variables in the error bdd.
+        ∃c ∀u: dst(t)[t <- bdd_pred(t,u,c)] & !error(t,u,c)
 
     @returns: BDD of the predecessor states
     **/
 
-    // NOTE: I tried considering two special cases: error(t,u,c) and error(t),
+    // TODO: I tried considering two special cases: error(t,u,c) and error(t),
     //       and move error(t) outside of quantification ∀u ∃c.
-    //       It slowed down..
-    // TODO: try again and test on benchmarks
+    //       (this should be equivalent to is_moore case)
+    //       It slowed down...
+    //       Properly evaluate.
 
     dst = dst.VectorCompose(get_substitution());
 
     if (is_moore)  // we use this for checking unrealizability (i.e. realizability by env of the dual spec)
     {
+        // TODO: use AndAbstract (and some negations)
         BDD result = dst.And(~error);
 
         vector<BDD> uncontrollable = get_uncontrollable_vars_bdds();
@@ -333,7 +333,8 @@ BDD sdf::GameSolver::calc_win_region()
  *
  *     strategy(t,u,c) = ∃t' W(t) & T(t,i,c,t') & W(t')
  *
- * But since t' <-> bdd(t,i,o), (and since we use error=error(t,u,c)), we use:
+ * But since t' <-> bdd(t,i,o) and since we use error=error(t,u,c) rather than error(t),
+ * we get:
  *
  *     strategy(t,u,c) = ~error(t,u,c) & W(t) & W(t)[t <- bdd_next_t(t,u,c)]
  *
@@ -344,9 +345,164 @@ BDD sdf::GameSolver::get_nondet_strategy()
 {
     spdlog::info("get_nondet_strategy..");
 
-    // this version results in smaller BDD-count numbers
-    return ~error & win_region & win_region.VectorCompose(get_substitution());
-//    return ~win_region | (~error & win_region.VectorCompose(get_substitution()));
+    // this means:
+    // every (x,i,o) such that x in W, from x the (i,o)-transition is safe and leads to W
+    // (note that win_region.VectorCompose(get_substitution()) contains exactly all (x,i,o) such that from x the (i,o)-transition leads to W)
+    return win_region & ~error & win_region.VectorCompose(get_substitution());
+    // the above version seems (properly evaluate?) to yield smaller BDDs than the version below
+    // return (~error & win_region.VectorCompose(get_substitution()));
+    // return (~error & win_region.VectorCompose(get_substitution())).Restrict(win_region);
+}
+
+
+BDD extract_one_func_via_squeeze(const Cudd& cudd, BDD& can_be_true, BDD& can_be_false)
+{
+    BDD c_must_be_true = ~can_be_false & can_be_true;
+//    BDD c_must_be_false = ~can_be_true & can_be_false;
+
+//    auto support_indicesF = cudd.SupportIndices(vector<BDD>{c_must_be_false});
+//    auto support_indicesT = cudd.SupportIndices(vector<BDD>{c_must_be_true});
+
+//    auto siF = set<uint>(support_indicesF.begin(), support_indicesF.end());
+//    auto siT = set<uint>(support_indicesT.begin(), support_indicesT.end());
+
+//    vector<uint> diff;
+//    set_symmetric_difference(siF.begin(), siF.end(), siT.begin(), siT.end(), std::back_inserter(diff));
+//    spdlog::info("number of variables present in one but not in the other: {}", diff.size());
+//    copy(diff.begin(), diff.end(), std::ostream_iterator<uint>(std::cout, " "));
+//    cout << endl;
+
+    // Hm, I don't think it is worth? On two examples, it showed no benefit.
+//    for (auto new_var_cudd_idx : diff)
+//    {
+//        auto new_v = cudd.ReadVars((int)new_var_cudd_idx);
+//        c_must_be_false = c_must_be_false.ExistAbstract(new_v);
+//        c_must_be_true = c_must_be_true.ExistAbstract(new_v);
+//        can_be_true = can_be_true.ExistAbstract(new_v);
+//    }
+
+    // Note that we cannot use `c_must_be_true = ~c_can_be_false`,
+    // since the negation can cause including tuples (t,i,o) that violate non_det_strategy.
+
+    can_be_false = cudd.bddZero();
+//    c_must_be_false = cudd.bddZero();
+
+    return c_must_be_true.Squeeze(can_be_true);
+}
+
+
+BDD extract_one_func_via_abstraction(const Cudd& cudd, BDD& can_be_true, BDD& can_be_false, const BDD& reachable)
+{
+    BDD c_must_be_true = ~can_be_false & can_be_true;
+    BDD c_must_be_false = can_be_false & ~can_be_true;
+    // Note that we cannot use `c_must_be_true = ~c_can_be_false`,
+    // since the negation can cause including tuples (t,i,o) that violate non_det_strategy.
+
+    // Note: having reachable=bddOne is equivalent to having no reachability optimization
+
+    can_be_false = can_be_true = cudd.bddZero();  // killing node refs
+
+    // we now optimize c_must_be_true
+
+    // NOTE: The following optimization takes a lot of time.
+    //       It does reduce circuit size, but does it worth the increased time?
+    auto support_indices = cudd.SupportIndices({c_must_be_false, c_must_be_true});
+
+    auto vars_abstracted_away = vector<uint>();
+
+    // Are some orders of variable abstraction better than others?
+    // The following order is based on hypothesis that larger-index variables play less important role:
+    // usually, the larger the automaton state the closer it is to the rejecting state,
+    // whereas the inputs have the smallest BDD indices.
+    // This is an heuristics. There are better ways for finding automata states that likely do not affect the output.
+    std::sort(support_indices.begin(), support_indices.end(), std::greater<>());  // on abcg_arbiter, this shows substantial reduction (without -a)
+
+    for (auto var_cudd_idx : support_indices)
+    {
+        auto v = cudd.ReadVars((int)var_cudd_idx);
+
+        auto new_c_must_be_false = c_must_be_false.ExistAbstract(v);
+        auto new_c_must_be_true = c_must_be_true.ExistAbstract(v);
+
+        if (((new_c_must_be_false & new_c_must_be_true) & reachable) == cudd.bddZero())
+        {
+            c_must_be_false = new_c_must_be_false;
+            c_must_be_true = new_c_must_be_true;
+            vars_abstracted_away.push_back(var_cudd_idx);
+        }
+    }
+
+    spdlog::info("extract model: the variables were quantified away: {}", sdf::join(", ", vars_abstracted_away));
+
+    return c_must_be_true.Restrict((c_must_be_true | c_must_be_false) & reachable);
+}
+
+BDD sdf::GameSolver::compute_monolithic_T()
+{
+    spdlog::info("compute_monolithic_T: computing monolithic T(x,i,o,x')...");
+    auto start_time = timer.sec_from_origin();
+
+    auto getCuddIdxState       = [&](int s) { return (int)(NOF_SIGNALS + s); };
+    auto getCuddIdxPrimedState = [&](int s) { return (int)(NOF_SIGNALS + aut->num_states() + s); };
+
+    BDD T = cudd.bddOne();
+    for (auto s = 0; s < (int)aut->num_states(); ++s)
+    {
+        T &= ~(cudd.bddVar(getCuddIdxPrimedState(s)) ^ pre_trans_func.at(getCuddIdxState(s)));
+
+        string name = string("s'") + to_string(s);  // we create a name for a newly created BDD variable for the primed state variable
+        cudd.pushVariableName(name);
+    }
+
+    spdlog::info("compute_monolithic_T took (sec.): {}", timer.sec_from_origin() - start_time);
+
+    return T;
+}
+
+BDD sdf::GameSolver::compute_reachable(const BDD& T)
+{
+    // 1. build the transition relation T(x,i,o,x'),
+    // 2. compute the set of reachable states.
+    // Unfortunately, T(x,i,o,x') is one large monolithic relation and uses the primed variables.
+    // (I don't know how to compute reachable states without using the primed variables and monolithic T.)
+
+    auto start_time_sec = timer.sec_from_origin();
+    spdlog::info("compute_reachable...");
+
+    auto getCuddIdxState       = [&](int s) { return (int)(NOF_SIGNALS + s); };
+    auto getCuddIdxPrimedState = [&](int s) { return (int)(NOF_SIGNALS + aut->num_states() + s); };
+
+    vector<BDD> states;
+    vector<BDD> primedStates;
+    for (auto s = 0; s < (int)aut->num_states(); ++s)
+    {
+        states.push_back(cudd.bddVar(getCuddIdxState(s)));
+        primedStates.push_back(cudd.bddVar(getCuddIdxPrimedState(s)));
+    }
+
+    vector<BDD> inp_out_state_vars = a_union_b(states, a_union_b(get_controllable_vars_bdds(), get_uncontrollable_vars_bdds()));
+    BDD varsCube_to_quantify = cudd.bddComputeCube(inp_out_state_vars.data(), nullptr, (int)inp_out_state_vars.size());
+
+    // dumpBddAsDot(cudd, varsCube_to_quantify, "cube_to_quantify");
+
+    BDD reach = init;
+    for (auto i = 0; ; ++i)
+    {
+        spdlog::info("compute_reachable: iteration {}: node count: {}", i, cudd.ReadNodeCount());
+        // dumpBddAsDot(cudd, reach, "reach" + to_string(i));
+
+        BDD reach_prev = reach;
+        reach |= reach.AndAbstract(T, varsCube_to_quantify).SwapVariables(states, primedStates);  // SwapVariables results in unpriming of the state variables in the bdd
+
+        if (reach == cudd.bddOne())
+            spdlog::info("compute_reachable: EVERYTHING is reachable");
+
+        if (reach_prev == reach)
+        {
+            spdlog::info("compute_reachability took (sec): {}", timer.sec_from_origin() - start_time_sec);
+            return reach;
+        }
+    }
 }
 
 
@@ -365,11 +521,27 @@ hmap<uint,BDD> sdf::GameSolver::extract_output_funcs()
 
     spdlog::info("extract_output_funcs..");
 
-    cudd.FreeTree();  // ordering that worked for win region computation might not work here
-
     hmap<uint,BDD> model_by_cuddidx;
 
     vector<BDD> controls = get_controllable_vars_bdds();
+
+    auto reachable = cudd.bddOne();
+    if (do_reach_optim)
+    {
+        auto T = compute_monolithic_T() & non_det_strategy & ~error;
+        reachable = compute_reachable(T);
+    }
+
+    // the order of concretisation substantially affects the circuit size,
+    // but how to choose a good order is unclear
+
+    /*
+    std::sort(controls.begin(), controls.end(),
+              [&](const BDD& c1, const BDD& c2)
+              {
+                  return inputs_outputs[c1.NodeReadIndex()].ap_name() < inputs_outputs[c2.NodeReadIndex()].ap_name();
+              });
+    */
 
     while (!controls.empty())
     {
@@ -377,13 +549,13 @@ hmap<uint,BDD> sdf::GameSolver::extract_output_funcs()
 
         auto c_name = inputs_outputs[c.NodeReadIndex()].ap_name();
         spdlog::info("extracting BDD model for {}...", c_name);
-//        dumpBddAsDot(cudd, c, c_name);
+        // dumpBddAsDot(cudd, c, c_name);
 
         BDD c_arena;
         if (!controls.empty())
         {
-            BDD cube = cudd.bddComputeCube(controls.data(), nullptr, (int)controls.size());
-            c_arena = non_det_strategy.ExistAbstract(cube);
+            BDD others_cube = cudd.bddComputeCube(controls.data(), nullptr, (int)controls.size());
+            c_arena = non_det_strategy.ExistAbstract(others_cube);
         }
         else //no other signals left
             c_arena = non_det_strategy;
@@ -393,45 +565,26 @@ hmap<uint,BDD> sdf::GameSolver::extract_output_funcs()
         BDD c_can_be_true = c_arena.Cofactor(c);
         BDD c_can_be_false = c_arena.Cofactor(~c);
 
-        BDD c_must_be_true = ~c_can_be_false & c_can_be_true;
-        BDD c_must_be_false = c_can_be_false & ~c_can_be_true;
-        // Note that we cannot use `c_must_be_true = ~c_can_be_false`,
-        // since the negation can cause including tuples (t,i,o) that violate non_det_strategy.
+        c_arena = cudd.bddZero();  // killing node refs
 
-        auto support_indices = cudd.SupportIndices({c_must_be_false, c_must_be_true});
-        for (auto var_cudd_idx : support_indices)
-        {
-            // TODO: try the specific order where for output g_i the input r_i is abstracted last
-            //       while non relevant variables are abstracted first
-            //       (would be cool to calculate related variables and abstract them last)
-            auto v = cudd.ReadVars((int)var_cudd_idx);
-            auto new_c_must_be_false = c_must_be_false.ExistAbstract(v);
-            auto new_c_must_be_true = c_must_be_true.ExistAbstract(v);
+//        BDD c_model = extract_one_func_via_squeeze(cudd, c_can_be_true, c_can_be_false);
 
-            if ((new_c_must_be_false & new_c_must_be_true) == cudd.bddZero())
-            {
-                c_must_be_false = new_c_must_be_false;
-                c_must_be_true = new_c_must_be_true;
-            }
-        }
-
-        // We use 'restrict' operation, but we could also just do:
-        //     c_model = care_set -> must_be_true
-        // but this is (presumably) less efficient (in time? in size?).
-        // (intuitively, because we always set c_model to 1 if !care_set, but we could set it to 0)
-        //
-        // The result of restrict operation satisfies:
-        //     on c_care_set: c_must_be_true <-> must_be_true.Restrict(c_care_set)
-
-        BDD c_model = c_must_be_true.Restrict(c_must_be_true | c_must_be_false);
+        BDD c_model = extract_one_func_via_abstraction(cudd, c_can_be_true, c_can_be_false, reachable);
+        c_can_be_true = c_can_be_false = cudd.bddZero();  // killing refs if they weren't killed before
 
         model_by_cuddidx[c.NodeReadIndex()] = c_model;
 
-        // killing node refs: TODO: check if it affects anything
-        c_must_be_false = c_must_be_true = c_can_be_false = c_can_be_true = c_arena = cudd.bddZero();
-
         non_det_strategy = non_det_strategy.Compose(c_model, (int)c.NodeReadIndex());
-        //non_det_strategy = non_det_strategy & ((c & c_model) | (~c & ~c_model));
+
+        // Note: we could re-compute the set of reachable states after each concretisation, but
+        // 1. it is expensive
+        // 2. does not seem to yield substantial circuit reduction
+        //
+        // if (do_reach_optim)
+        // {
+        //     T = T.Compose(c_model, (int)c.NodeReadIndex());
+        //     reachable = compute_reachable(T);  // the reachable set shrinks as we concretize output functions
+        // }
     }
 
     return model_by_cuddidx;
@@ -440,9 +593,9 @@ hmap<uint,BDD> sdf::GameSolver::extract_output_funcs()
 
 void init_cudd(Cudd& cudd)
 {
-//    cudd.Srandom(827464282);  // for reproducibility
+    cudd.Srandom(827464282);  // for reproducibility
     cudd.AutodynEnable(CUDD_REORDER_SIFT);
-//    cudd.EnableReorderingReporting();  // TODO: AK: remove: temporarily
+//    cudd.EnableReorderingReporting();
 }
 
 
@@ -457,7 +610,7 @@ bool sdf::GameSolver::check_realizability()
 
     for (uint i = 0; i < inputs_outputs.size(); ++i)
     {
-        cudd.bddVar(i);
+        cudd.bddVar(i);  // NOLINT(*-narrowing-conversions)
         cudd.pushVariableName(inputs_outputs[i].ap_name());
     }
     for (uint s = 0; s < aut->num_states(); ++s)
@@ -489,16 +642,22 @@ aiger* sdf::GameSolver::synthesize()
     }
 
     // now we have win_region and compute a nondet strategy
-    
-    cudd.AutodynDisable();  // disabling re-ordering greatly helps on some examples (arbiter, load_balancer), but on others (prioritised_arbiter) it worsens things.
+
+//    cudd.AutodynDisable();  // disabling re-ordering greatly helps on some examples (arbiter, load_balancer), but on others (prioritised_arbiter) it worsens things.
 
     non_det_strategy = get_nondet_strategy();    // note: this introduces a really lot of BDD nodes
     log_time("get_nondet_strategy");
     spdlog::info("BDD node count after get_nondet_strategy: {}", cudd.ReadNodeCount());
 
     // cleaning non-used BDDs
-    init = error = win_region = cudd.bddZero();
-    // we can't clear pre_trans_func bc we use it to define how latches (states) evolve in the impl (note: compared to output functions, pre_trans_func is small)
+    win_region = cudd.bddZero();
+    if (!do_reach_optim)
+    {
+        init = cudd.bddZero();
+        error = cudd.bddZero();
+    }
+
+    // note: pre_trans_func is needed to define how latches evolve in the impl (anyway, pre_trans_func is small compared to output functions)
 
     outModel_by_cuddIdx = extract_output_funcs();
     log_time("extract_output_funcs");
@@ -506,6 +665,7 @@ aiger* sdf::GameSolver::synthesize()
 
     // cleaning non-used BDDs
     non_det_strategy = cudd.bddZero();
+    init = error = cudd.bddZero();
 
     spdlog::info("BDD node count of det strategy: {}", cudd.ReadNodeCount());
     auto elapsed_sec = time_limit_sec - timer.sec_from_origin();
@@ -595,7 +755,7 @@ uint sdf::GameSolver::walk(DdNode* a_dd, set<uint>& cuddIdxStatesUsed)  // TODO:
     /**
     Walk given DdNode node (recursively).
     If a given node requires intermediate AND gates for its representation, this function adds them.
-        Literal representing given input node is `not` added to the spec.
+    Literal representing given input node is `not` added to the spec.
 
     :returns: literal representing input node
     **/
