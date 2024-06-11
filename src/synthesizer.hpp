@@ -25,17 +25,20 @@ struct SpecDescr
     const std::string& file_name;
     const bool extract_model;
     const bool do_reach_optim;
+    const bool do_var_group_optim;
     const std::string& output_file_name;
 
     SpecDescr(bool checkUnreal,
               const std::string& fileName,
               bool extractModel = false,
               bool do_reach_optim = false,
+              bool do_var_group_optim = false,
               const std::string& outputFileName = "") :
             check_unreal(checkUnreal),
             file_name(fileName),
             extract_model(extractModel),
             do_reach_optim(do_reach_optim),
+            do_var_group_optim(do_var_group_optim),
             output_file_name(outputFileName) {}
 };
 
@@ -64,18 +67,22 @@ struct SpecDescr2
     const bool is_moore;
     const bool extract_model;
     const bool do_reach_optim;
+    const bool do_var_grouping_optim;
 
     SpecDescr2(const T& spec,
               const std::unordered_set<spot::formula>& inputs,
               const std::unordered_set<spot::formula>& outputs,
               bool isMoore,
               bool extractModel,
-              bool do_reach_optim) :
+              bool do_reach_optim,
+              bool do_var_grouping_optim) :
             spec(spec),
             inputs(inputs), outputs(outputs),
             is_moore(isMoore),
             extract_model(extractModel),
-            do_reach_optim(do_reach_optim) {}
+            do_reach_optim(do_reach_optim),
+            do_var_grouping_optim(do_var_grouping_optim)
+            {}
 };
 
 /**

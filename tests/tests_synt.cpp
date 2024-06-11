@@ -134,7 +134,7 @@ void synt_and_verify_common(const string& spec, const string& tmpFolder, bool re
     auto specPath = "./specs/" + spec;
     auto modelPath = tmpFolder + "/" + spec + ".aag";
     cout << "(TEST) SYNTHESIS..." << endl;
-    auto status = run_tlsf(SpecDescr(false, specPath, true, reach_optimisation, modelPath), {2,4});
+    auto status = run_tlsf(SpecDescr(false, specPath, true, reach_optimisation, false, modelPath), {2,4});
     ASSERT_EQ(SYNTCOMP_RC_REAL, status);
     cout << "(TEST) SYNTHESIS: SUCCESS!" << endl;
 

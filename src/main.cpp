@@ -42,6 +42,12 @@ int main(int argc, const char *argv[])
              "automatically disabled when the number of states in the safety automaton > " + to_string(R_OPTIM_BOUND),
              {'a', "ra"});
 
+    args::Flag do_var_grouping_optim_flag
+            (parser,
+             "g",
+             "do variable-order grouping after 0.25*time_limit",
+             {'g', "g"});
+
     args::ValueFlagList<uint> k_list_arg
             (parser,
              "k",
@@ -112,6 +118,7 @@ int main(int argc, const char *argv[])
     bool check_dual_spec(check_dual_flag.Get());
     bool check_real_only(check_real_only_flag.Get());
     bool do_reach_analysis(do_reach_optim_flag.Get());
+    bool do_var_group_optim(do_var_grouping_optim_flag.Get());
 
     if (do_reach_analysis && (check_dual_spec || check_real_only))
     {
@@ -123,7 +130,7 @@ int main(int argc, const char *argv[])
     spdlog::info("tlsf_file: {}, check_dual_spec: {}, k: {}, output_file: {}",
                  tlsf_file_name, check_dual_spec, join(", ", k_list), output_file_name);
 
-    return sdf::run_tlsf(SpecDescr(check_dual_spec, tlsf_file_name, !check_real_only, do_reach_analysis, output_file_name),
+    return sdf::run_tlsf(SpecDescr(check_dual_spec, tlsf_file_name, !check_real_only, do_reach_analysis, do_var_group_optim, output_file_name),
                          k_list);
 }
 

@@ -40,6 +40,7 @@ public:
                const std::unordered_set<spot::formula>& outputs_,
                const spot::twa_graph_ptr& aut_,
                const bool do_reach_optim,
+               const bool do_var_grouping_optimization,
                uint time_limit_sec_ = 3600) :
         is_moore(is_moore_),
         inputs(inputs_.begin(), inputs_.end()),
@@ -47,6 +48,7 @@ public:
         NOF_SIGNALS(inputs.size()+outputs.size()),
         aut(aut_),
         do_reach_optim(do_reach_optim),
+        do_var_grouping_optimization(do_var_grouping_optimization),
         time_limit_sec(time_limit_sec_)
     {
         inputs_outputs.insert(inputs_outputs.end(), inputs.begin(), inputs.end());      // NB: inputs, not inputs_
@@ -76,6 +78,7 @@ private:
     const uint NOF_SIGNALS;
     spot::twa_graph_ptr aut; // TODO: make const
     const bool do_reach_optim;
+    const bool do_var_grouping_optimization;
 
     const uint time_limit_sec;
 
