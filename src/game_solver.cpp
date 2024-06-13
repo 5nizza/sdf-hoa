@@ -706,8 +706,15 @@ hmap<uint,BDD> sdf::GameSolver::extract_output_funcs()
     auto reachable = cudd.bddOne();
     if (do_reach_optim)
     {
+        auto was_reordering_disabled = not cudd.ReorderingStatus(nullptr);
+
+        cudd.AutodynEnable(CUDD_REORDER_SAME);
+
         auto T = compute_monolithic_T() & non_det_strategy & ~error;
         reachable = compute_reachable(T);
+
+        if (was_reordering_disabled)
+            cudd.AutodynDisable();
     }
 
     // the order of concretisation substantially affects the circuit size,
