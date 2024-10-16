@@ -20,16 +20,4 @@ inline bool is_acc_sink(const spot::twa_graph_ptr& aut, uint state)
     return false;
 }
 
-inline void merge_atm(spot::twa_graph_ptr& atm)
-{
-    LOOP:
-    auto nof_states_old = atm->num_states();
-    auto nof_edges_old = atm->num_edges();
-    atm->merge_states();
-    atm->merge_edges();
-    if (atm->num_states() < nof_states_old ||
-        atm->num_edges() < nof_edges_old)
-        goto LOOP;
-}
-
 }  // namespace sdf

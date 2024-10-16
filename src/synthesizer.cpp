@@ -12,6 +12,7 @@
 #define BDD spotBDD
     #include <spot/twaalgos/dot.hh>
     #include <spot/twaalgos/translate.hh>
+    #include <spot/twaalgos/simulation.hh>
 //    #include <spot/parseaut/public.hh>
 #undef BDD
 
@@ -149,10 +150,9 @@ bool sdf::synthesize_atm(const SpecDescr2<spot::twa_graph_ptr>& spec_descr,
         spdlog::info("trying k = {}", k);
         auto k_aut = k_reduce(spec_descr.spec, k);
 
-        spdlog::info("automaton before iterative merging states/edges: {} states, {} edges", k_aut->num_states(), k_aut->num_edges());
-
-        merge_atm(k_aut);
-        spdlog::info("merged k-automaton: {} states, {} edges", k_aut->num_states(), k_aut->num_edges());
+        spdlog::info("automaton before sim/cosim reduction: {} states, {} edges", k_aut->num_states(), k_aut->num_edges());
+        k_aut = spot::reduce_iterated_sba(k_aut);
+        spdlog::info("... after sim/cosim reduction: {} states, {} edges", k_aut->num_states(), k_aut->num_edges());
 
         {   // debug
             stringstream ss;
