@@ -501,23 +501,16 @@ BDD sdf::GameSolver::calc_win_region()
     }
 }
 
-
 /**
- * Get non-deterministic strategy from the winning region.
- * If the system outputs controllable values that satisfy this non-deterministic strategy,
- * then the system wins.
- * I.e., a non-deterministic strategy describes for each state all possible output values
- * (below is assuming W excludes error states)
+ * Get nondeterministic strategy from the winning region.
+ * A nondet strategy satisfies:
+ * ∀t∈W.∀i.∀o: (t,i,o)∈nondet <-> Succ(t,i,o)∈W & (t,i,o)⊨¬error
+ * A nondeterministic strategy is not unique, thanks to the restriction of the above property to W.
+ * We compute it as
  *
- *     strategy(t,u,c) = ∃t' W(t) & T(t,i,c,t') & W(t')
+ *     strategy(t,i,o) = ¬error(t,i,o) & W(t) & W(t)[t <- bdd_next_t(t,i,o)]
  *
- * But since t' <-> bdd(t,i,o) and since we use error=error(t,u,c) rather than error(t),
- * we get:
- *
- *     strategy(t,u,c) = ~error(t,u,c) & W(t) & W(t)[t <- bdd_next_t(t,u,c)]
- *
- * @returns: non-deterministic strategy bdd
- * @note: The strategy is non-deterministic -- determinization is done later.
+ * @returns: nondeterministic strategy bdd
  */
 BDD sdf::GameSolver::get_nondet_strategy()
 {
@@ -527,7 +520,7 @@ BDD sdf::GameSolver::get_nondet_strategy()
     // every (x,i,o) such that x in W, from x the (i,o)-transition is safe and leads to W
     // (note that win_region.VectorCompose(get_substitution()) contains exactly all (x,i,o) such that from x the (i,o)-transition leads to W)
     return win_region & ~error & win_region.VectorCompose(get_substitution());
-    // the above version seems (properly evaluate?) to yield smaller BDDs than the version below
+    // the above version seems (properly evaluate?) to yield smaller BDDs than the versions below
     // return (~error & win_region.VectorCompose(get_substitution()));
     // return (~error & win_region.VectorCompose(get_substitution())).Restrict(win_region);
 }
@@ -744,6 +737,7 @@ hmap<uint,BDD> sdf::GameSolver::extract_output_funcs()
         }
         else //no other signals left
             c_arena = non_det_strategy;
+
         // Now we have: c_arena(t,u,c) = ∃c_others: nondet(t,u,c)
         // (i.e., c_arena talks about this particular c, about t and u)
 
