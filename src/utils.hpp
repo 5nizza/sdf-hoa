@@ -387,6 +387,19 @@ struct pair_hash
 //};
 
 
+template<typename OutT, typename InT>
+OutT to_container(const InT& c)
+{
+    OutT result(c.begin(), c.end());
+    return result;
+}
+
+template<typename ContainerFrom, typename ContainterTo>
+void insert_all(const ContainerFrom& from, ContainterTo& add_dst)
+{
+    add_dst.insert(from.begin(), from.end());
+}
+
 template<typename T>
 std::vector<T> to_vector(const std::set<T>& c)
 {

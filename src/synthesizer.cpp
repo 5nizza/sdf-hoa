@@ -22,6 +22,8 @@ extern "C"
     #include <aiger.h>
 }
 
+#include <fstream>
+
 #include <spdlog/spdlog.h>
 #include <spdlog/fmt/bundled/ostream.h>
 
@@ -32,56 +34,6 @@ using namespace sdf;
 
 #define hset unordered_set
 
-
-int sdf::run_hoa(const SpecDescr& spec_descr,
-                 const std::vector<uint>& k_to_iterate)
-{
-    auto [aut, inputs, outputs, is_moore] = read_ehoa(spec_descr.file_name);
-
-    // TODO: what happens when tlsf does have inputs/outputs but the formula doesn't mention them?
-    //       (should still have it)
-
-    spdlog::info("\n"
-        "  hoa: {}\n"
-        "  inputs: {}\n"
-        "  outputs: {}\n"
-        "  UCW atm size: {}\n"
-        "  is_moore: ",
-        spec_descr.file_name, join(", ", inputs), join(", ", outputs), aut->num_states(), is_moore);
-
-    {   // debug
-        stringstream ss;
-        spot::print_dot(ss, aut);
-        spdlog::debug("\n{}", ss.str());
-    }
-
-    aiger* model;
-    bool game_is_real = synthesize_atm(SpecDescr2(aut, inputs, outputs, is_moore, spec_descr.extract_model, spec_descr.do_reach_optim, spec_descr.do_var_group_optim), k_to_iterate, model);
-
-    if (!game_is_real)
-    {   // game is won by Adam, but it does not mean the invoked spec is unrealizable (due to k-reduction)
-        cout << SYNTCOMP_STR_UNKNOWN << endl;
-        return SYNTCOMP_RC_UNKNOWN;
-    }
-
-    // game is won by Eve, so the spec is realizable
-
-    if (spec_descr.extract_model)
-    {
-        if (!spec_descr.output_file_name.empty())
-        {
-            spdlog::info("writing a model to {}", spec_descr.output_file_name);
-            int res = (spec_descr.output_file_name == "stdout") ?
-                      aiger_write_to_file(model, aiger_ascii_mode, stdout):
-                      aiger_open_and_write_to_file(model, spec_descr.output_file_name.c_str());
-            MASSERT(res, "Could not write the model to file");
-        }
-        aiger_reset(model);
-    }
-
-    cout << SYNTCOMP_STR_REAL << endl;
-    return SYNTCOMP_RC_REAL;
-}
 
 template <> struct fmt::formatter<spot::formula> : ostream_formatter {};  // reason: to be able to pass to spdlog::info(..) the object of spot::formula which implements "<<"
 
@@ -103,13 +55,12 @@ int sdf::run_tlsf(const SpecDescr& spec_descr,
         "  outputs: {}\n"
         "  is_moore: {}\n",
         spec_descr.file_name, formula, join(", ", inputs), join(", ", outputs), is_moore);
-    spdlog::info("checking {}realizability", spec_descr.check_unreal ? "UN" : "");
 
-    aiger* model;
+    unordered_map<string,string> models;
     bool game_is_real;
     game_is_real = spec_descr.check_unreal?
-            synthesize_formula(SpecDescr2(spot::formula::Not(formula), outputs, inputs, !is_moore, spec_descr.extract_model, spec_descr.do_reach_optim, spec_descr.do_var_group_optim), k_to_iterate, model):
-            synthesize_formula(SpecDescr2(formula, inputs, outputs, is_moore, spec_descr.extract_model, spec_descr.do_reach_optim, spec_descr.do_var_group_optim), k_to_iterate, model);
+            synthesize_formula(SpecDescr2(spot::formula::Not(formula), outputs, inputs, !is_moore, spec_descr.extract_model, spec_descr.do_reach_optim, spec_descr.do_var_group_optim), k_to_iterate, models):
+            synthesize_formula(SpecDescr2(formula, inputs, outputs, is_moore, spec_descr.extract_model, spec_descr.do_reach_optim, spec_descr.do_var_group_optim), k_to_iterate, models);
 
     if (!game_is_real)
     {   // game is won by Adam, but it does not mean the invoked spec is unrealizable (due to k-reduction)
@@ -124,17 +75,16 @@ int sdf::run_tlsf(const SpecDescr& spec_descr,
 
     cout << (spec_descr.check_unreal ? SYNTCOMP_STR_UNREAL : SYNTCOMP_STR_REAL) << endl;
 
-    if (spec_descr.extract_model)
+    if (!spec_descr.output_file_name.empty())
     {
-        if (!spec_descr.output_file_name.empty())
+        for (auto const& [file_type, file_content] : models)
         {
-            spdlog::info("writing a model to {}", spec_descr.output_file_name);
-            int res = (spec_descr.output_file_name == "stdout") ?
-                      aiger_write_to_file(model, aiger_ascii_mode, stdout):
-                      aiger_open_and_write_to_file(model, spec_descr.output_file_name.c_str());
-            MASSERT(res, "Could not write the model to file");
+            auto file_extension = file_type == "aiger"? "solution.aag" : file_type;
+            auto file_name = format("{}.{}", spec_descr.output_file_name, file_extension);
+            spdlog::info("writing {} model to {}", file_type, file_name);
+            ofstream out(file_name);
+            out << file_content;
         }
-        aiger_reset(model);
     }
 
     return (spec_descr.check_unreal ? SYNTCOMP_RC_UNREAL : SYNTCOMP_RC_REAL);
@@ -143,15 +93,23 @@ int sdf::run_tlsf(const SpecDescr& spec_descr,
 
 bool sdf::synthesize_atm(const SpecDescr2<spot::twa_graph_ptr>& spec_descr,
                          const std::vector<uint>& k_to_iterate,
-                         aiger*& model)
+                         unordered_map<string,string>& output_models)
 {
     for (auto k: k_to_iterate)
     {
         spdlog::info("trying k = {}", k);
         auto k_aut = k_reduce(spec_descr.spec, k);
 
+        MASSERT(k_aut->is_sba() == spot::trival::yes_value, "is the automaton with Buchi-state acceptance?");
+        MASSERT(k_aut->prop_terminal() == spot::trival::yes_value, "is the automaton terminal?");
+
         spdlog::info("automaton before sim/cosim reduction: {} states, {} edges", k_aut->num_states(), k_aut->num_edges());
-        k_aut = spot::reduce_iterated_sba(k_aut);
+        auto reduced_k_aut = spot::reduce_iterated_sba(k_aut);
+        reduced_k_aut->copy_named_properties_of(k_aut);    // TODO: strange: bug?: ask Ald about this (on lilydemo13.tlsf, the properties are not copied)
+        reduced_k_aut->copy_acceptance_of(k_aut);          // TODO: strange: bug?: ask Ald about this
+        k_aut = reduced_k_aut;
+        MASSERT(k_aut->is_sba() == spot::trival::yes_value, "is the automaton with Buchi-state acceptance?");
+        MASSERT(k_aut->prop_terminal() == spot::trival::yes_value, "is the automaton terminal?");
         spdlog::info("... after sim/cosim reduction: {} states, {} edges", k_aut->num_states(), k_aut->num_edges());
 
         {   // debug
@@ -164,16 +122,33 @@ bool sdf::synthesize_atm(const SpecDescr2<spot::twa_graph_ptr>& spec_descr,
                           spec_descr.do_reach_optim && (k_aut->num_states()<=R_OPTIM_BOUND),
                           spec_descr.do_var_grouping_optim,
                           3600);
-        if (spec_descr.extract_model)
+
+        aiger* aiger_model = nullptr;
+        auto realizable = solver.generate_qbf_for_relation_determinization(spec_descr.extract_model, output_models, aiger_model);
+
+        if (realizable)
         {
-            model = solver.synthesize();
-            if (model != nullptr)
-                return true;
-        }
-        else
-        {
-            if (solver.check_realizability())
-                return true;
+            if (spec_descr.extract_model)
+            {
+                for (int c_str_len = 1024 * 1024, res = 0; c_str_len <= 512 * 1024 * 1024 and res != 1; c_str_len *= 2)  // 512MB limit
+                {
+                    auto raw_c_str = (char*) malloc(c_str_len);
+                    if (raw_c_str != nullptr)
+                    {
+                        res = aiger_write_to_string(aiger_model, aiger_mode::aiger_ascii_mode, raw_c_str, c_str_len);
+                        if (res == 1)
+                            output_models["aiger"] = string(raw_c_str);
+                        free(raw_c_str);
+                    }
+                    else
+                        spdlog::warn("could not allocate memory for AIGER string");
+                }
+                if (spec_descr.extract_model and output_models["aiger"].empty())
+                    spdlog::warn("could not create AIGER string");
+
+                aiger_reset(aiger_model);
+            }
+            return true;
         }
     }
 
@@ -183,7 +158,7 @@ bool sdf::synthesize_atm(const SpecDescr2<spot::twa_graph_ptr>& spec_descr,
 
 bool sdf::synthesize_formula(const SpecDescr2<spot::formula>& spec_descr,
                              const std::vector<uint>& k_to_iterate,
-                             aiger*& model)
+                             unordered_map<string,string>& output_models)
 {
     spot::formula neg_formula = spot::formula::Not(spec_descr.spec);
     spot::translator translator;
@@ -207,5 +182,5 @@ bool sdf::synthesize_formula(const SpecDescr2<spot::formula>& spec_descr,
 
     return synthesize_atm(SpecDescr2(aut, spec_descr.inputs, spec_descr.outputs, spec_descr.is_moore, spec_descr.extract_model, spec_descr.do_reach_optim, spec_descr.do_var_grouping_optim),
                           k_to_iterate,
-                          model);
+                          output_models);
 }

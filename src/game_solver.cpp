@@ -1,8 +1,9 @@
+#include "game_solver.hpp"
+
 #include <iostream>
 #include <algorithm>
 #include <spdlog/spdlog.h>
 #include <set>   // for variable-order optimization only
-
 
 #define BDD spotBDD
     #include <spot/twa/twagraph.hh>
@@ -10,29 +11,19 @@
     #include <spot/twa/formula2bdd.hh>
 #undef BDD
 
-
-#include "game_solver.hpp"
+#include "generate_qcir.hpp"
 #include "utils.hpp"
 
-
-extern "C" {
-    #include <cuddInt.h>  // useful for debugging to access the reference count
-}
-
+#include <cuddInt.h>  // useful for debugging to access the reference count
 
 #define NEGATED(lit) (lit ^ 1)
-
 
 // TODO: use spdlog's stopwatch?
 #define log_time(message) spdlog::info("{} took (sec): {}", message, timer.sec_restart());
 
-
 using namespace std;
 
-
 #define hmap unordered_map
-
-
 
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -216,23 +207,30 @@ vector<BDD> sdf::GameSolver::get_uncontrollable_vars_bdds()
 }
 
 
-// This function may be currently not used but useful for debugging.
-void dumpBddAsDot(Cudd& cudd, const BDD& model, const string& name)
+/**
+ * The function may be currently not used but it is useful for debugging.
+ * @param name: your name for the root node of BDD @param model
+ */
+string dumpBddAsDot(Cudd& cudd, const BDD& model, const string& name, bool use_node_names)
 {
     const char* inames[cudd.ReadSize()];
     string inames_str[cudd.ReadSize()];  // we have to store those strings for the time DumpDot is operating
-
     for (uint i = 0; i < (uint)cudd.ReadSize(); ++i)
     {
         inames_str[i] = cudd.getVariableName(i);
         inames[i] = inames_str[i].c_str();
     }
 
-    FILE *file = fopen((name + ".dot").c_str(), "w");
-    const char *onames[] = {name.c_str()};
+    char* buffer;
+    size_t size;
+    FILE* memstream = open_memstream(&buffer, &size);
 
-    cudd.DumpDot((vector<BDD>) {model}, inames, onames, file);
-    fclose(file);
+    const char* onames[] = {name.c_str()};
+    cudd.DumpDot((vector<BDD>) {model}, use_node_names? inames : nullptr, onames, memstream);
+    fclose(memstream);
+    auto result = string(buffer);
+    free(buffer);
+    return result;
 }
 
 
@@ -782,7 +780,7 @@ bool sdf::GameSolver::check_realizability()
 {
     init_cudd(cudd);
 
-    /* The CUDD variables index is as follows:
+    /* The CUDD-variables index is as follows:
      * first come inputs and outputs, ordered accordingly,
      * then come variables of automaton states
      * (thus, cuddIdx = state + NOF_SIGNALS) */
@@ -812,8 +810,90 @@ bool sdf::GameSolver::check_realizability()
 }
 
 
+bool sdf::GameSolver::generate_qbf_for_relation_determinization(bool extract_model,
+                                                                unordered_map<string,string>& qcir_models, aiger*& aiger_model)
+{
+    spdlog::info("generate_qbf_for_relation_determinization");
+
+    if (!check_realizability())
+    {
+        spdlog::info("BDD node count after check_realizability: {}", cudd.ReadNodeCount());
+        return false;
+    }
+
+    /**
+     * Create QBF:
+     *     ∀t: W(t) -> ∀i.∀o: (t,i,o)⊨¬error ∧ Succ(t,i,o)∈W
+     * Since W does not depend on i,o, we shift the quantifier for i and o:
+     *     ∀t.∀i.∀o: W(t) -> (t,i,o)⊨¬error ∧ Succ(t,i,o)∈W
+     * This shift is necessary because most QBF solvers require the prenex form.
+     */
+
+    // Disabling re-ordering greatly helps on some examples (arbiter, load_balancer), but on others (prioritised_arbiter) it worsens things.
+    cudd.AutodynDisable();
+    QcirObject qcir;
+
+    {   // QCIR
+        auto exists_indices = set<uint>();
+        for (const auto& b: get_controllable_vars_bdds())
+            exists_indices.insert(b.NodeReadIndex());
+
+        spdlog::info("cudd node count (win_region+T+error): {}", cudd.ReadNodeCount());
+        auto premise = win_region;
+        auto conclusion = ~error & win_region.VectorCompose(get_substitution());
+
+        // Generate QCIR
+        // ∀t.∀i.∀o: W(t) -> (t,i,o)⊨¬error ∧ Succ(t,i,o)∈W
+        // where the premise and the conclusion do not share intermediate nodes.
+        qcir_models["ite.qcir"] = generate_qcir_implication(cudd, premise, conclusion, exists_indices, true, true, false).qcir_str;
+        qcir = generate_qcir_implication(cudd, premise, conclusion, exists_indices, true, true, true);
+        qcir_models["qcir"] = qcir.qcir_str;
+        qcir_models["slightly.qcir"] = generate_qcir_implication(cudd, premise, conclusion, exists_indices, true, false, true).qcir_str;
+//        qcir_models["monolithic.qcir"] = generate_qcir_implication(cudd, premise, conclusion, exists_indices, false, false, true);
+        // the option below does not use Cudd's substitue function (turns out, this produces larger _and_ harder QBF problems)
+        qcir_models["ww.qcir"] = generate_qcir_implication2(cudd, win_region, error, pre_trans_func, exists_indices, true).qcir_str;
+    }
+
+    if (extract_model)
+    {
+        non_det_strategy = get_nondet_strategy();
+
+        // cleaning non-used BDDs
+        win_region = cudd.bddZero();
+        if (!do_reach_optim)
+        {
+            init = cudd.bddZero();
+            error = cudd.bddZero();
+        }
+
+        // note: pre_trans_func is needed to define how latches evolve in the impl (anyway, pre_trans_func is small compared to output functions)
+
+        outModel_by_cuddIdx = extract_output_funcs();
+        log_time("extract_output_funcs");
+        spdlog::info("BDD node count after extract_output_funcs: {}", cudd.ReadNodeCount());
+
+        // cleaning non-used BDDs
+        non_det_strategy = cudd.bddZero();
+        init = error = cudd.bddZero();
+
+        spdlog::info("BDD node count of det strategy (before reordering): {}", cudd.ReadNodeCount());
+        cudd.ReduceHeap(CUDD_REORDER_SIFT_CONVERGE);
+        log_time("re-ordering for strategy extraction");
+        spdlog::info("BDD node count of det strategy (after reordering): {}", cudd.ReadNodeCount());
+
+        model_to_aiger(qcir.used_forall_indices, qcir.used_exists_indices, qcir.qcir_by_cudd);  // to be comparable with QBF models, we do not add the models for latches and instead use the inputs values
+        log_time("model_to_aiger");
+        spdlog::info("circuit size: {}", (aiger_lib->num_ands + aiger_lib->num_latches));
+
+        aiger_model = aiger_lib;
+    }
+    return true;
+}
+
 aiger* sdf::GameSolver::synthesize()
 {
+    return nullptr;
+    /*
     if (!check_realizability())
     {
         spdlog::info("BDD node count after check_realizability: {}", cudd.ReadNodeCount());
@@ -860,76 +940,99 @@ aiger* sdf::GameSolver::synthesize()
     log_time("reordering before aigerizing");
     spdlog::info("BDD node count of det strategy after reordering: {}", cudd.ReadNodeCount());
 
-    model_to_aiger();
+    hmap<uint,uint> _;
+    model_to_aiger(_);
     log_time("model_to_aiger");
     spdlog::info("circuit size: {}", (aiger_lib->num_ands + aiger_lib->num_latches));
 
     return aiger_lib;
+     */
 }
 
 
-void sdf::GameSolver::model_to_aiger()
+void sdf::GameSolver::model_to_aiger(const set<uint>& forall_indices, const set<uint>& exists_indices, const unordered_map<uint,uint>& qcir_by_cudd)
 {
+    MASSERT(exists_indices.size() == outModel_by_cuddIdx.size(), "");  // TODO: not always the case (means that some outputs can be anything)!
+
     aiger_lib = aiger_init();
 
-    // aiger: add inputs
-    for (uint i = 0; i < inputs.size(); ++i)  // assumes the i->i mapping of cudd indices to inputs
-        aiger_add_input(aiger_lib, (aiger_by_cudd[i] = generate_lit()), inputs[i].ap_name().c_str());
+    // allocate literals for latches which are actually used by the formula
+    // I also assume that only those latches will be used by the aiger model we generate
+    for (auto cuddIdx : forall_indices)
+    {
+        uint aigerLit = generate_lit();
+        aiger_by_cudd[cuddIdx] = aigerLit;
 
-    // allocate literals for latches, but their implementations will be added to AIGER later
-    for (const auto& it : pre_trans_func)
-        aiger_by_cudd[it.first] = generate_lit();
+        auto qcir_name = format("qcir {}", qcir_by_cudd.at(cuddIdx));
+        aiger_add_input(aiger_lib, aigerLit, qcir_name.c_str());
+    }
 
     // aiger: add outputs
     // Note: the models of outputs can depend on input and latch variables,
     //       but they do not depend on the output variables
 
     set<uint> cuddIdxStatesUsed;
-    for (const auto& it : outModel_by_cuddIdx)
+    for (auto outCuddIdx: exists_indices)
     {
-        uint bddVarIdx = it.first;
-        BDD bddModel = it.second;
-
+        BDD bddModel = outModel_by_cuddIdx.at(outCuddIdx);
         uint aigerLit = walk(bddModel.getNode(), cuddIdxStatesUsed);
-        aiger_by_cudd[bddVarIdx] = aigerLit;
-        auto outName = inputs_outputs[bddVarIdx].ap_name();  // hm, I don't like this implicit knowledge
-        aiger_add_output(aiger_lib, aigerLit, outName.c_str());
+        aiger_by_cudd[outCuddIdx] = aigerLit;
+        auto qcir_name = format("qcir {}", qcir_by_cudd.at(outCuddIdx));
+        aiger_add_output(aiger_lib, aigerLit, qcir_name.c_str());
     }
+
+    MASSERT(std::includes(forall_indices.begin(), forall_indices.end(), cuddIdxStatesUsed.begin(), cuddIdxStatesUsed.end()),
+            "assumption on sdf's model extraction: forall_indices should subsume cuddIdxStatesUsed");
 
     // aiger: add latches, but only those that are referenced in the output models (+implied dependencies).
     // The latch implementations may reference inputs and outputs,
     // but for outputs they refer to their models rather than to their original variables.
     // This is ensured by using the proper values in aiger_by_cudd (we prepared aiger_by_cudd for this).
 
-    if (cuddIdxStatesUsed.empty())
-        return;  // this model is combinatorial (does not rely on states)
+//    if (cuddIdxStatesUsed.empty())
+//        return;  // this model is combinatorial (does not rely on states)
 
-    set<uint> processed;
-    while (!cuddIdxStatesUsed.empty())
-    {
-        auto stateAsCuddIdx = pop_first<uint>(cuddIdxStatesUsed);
-        set<uint> new_to_process;
-        uint aigerLit = aiger_by_cudd[stateAsCuddIdx];
-        uint aigerLitNext = walk(pre_trans_func[stateAsCuddIdx].getNode(), new_to_process);
-        aiger_add_latch(aiger_lib, aigerLit, aigerLitNext, ("state " + to_string(stateAsCuddIdx - NOF_SIGNALS)).c_str());
+    // we add latches as inputs even if they are not used
 
-        processed.insert(stateAsCuddIdx);
-        for (const auto &e : new_to_process)
-            if (!contains(processed, e))
-                cuddIdxStatesUsed.insert(e);
-    }
+//    set<uint> processed;
+//    while (!cuddIdxStatesUsed.empty())
+//    {
+//        auto stateAsCuddIdx = pop_first<uint>(cuddIdxStatesUsed);
+//        set<uint> new_to_process;
+//        uint aigerLit = aiger_by_cudd.at(stateAsCuddIdx);
+//
+//        if (generate_latches)
+//        {
+//            uint aigerLitNext = walk(pre_trans_func.at(stateAsCuddIdx).getNode(), new_to_process);
+//            aiger_add_latch(aiger_lib, aigerLit, aigerLitNext,
+//                            ("state " + to_string(stateAsCuddIdx - NOF_SIGNALS)).c_str());
+//        }
+//        else
+//        {
+//            aiger_add_input(aiger_lib, aigerLit, ("state " + to_string(stateAsCuddIdx - NOF_SIGNALS)).c_str());
+//        }
+//
+//        processed.insert(stateAsCuddIdx);
+//        for (const auto &e : new_to_process)
+//            if (!contains(processed, e))
+//                cuddIdxStatesUsed.insert(e);
+//    }
 
     // By default, aiger latches are initialized to 0,
     // but the latch of the initial state has to start in 1, so ensure this:
-    uint s0 = aut->get_init_state_number();
-    uint s0_asCuddIdx = s0 + NOF_SIGNALS;
-    uint s0_asAigerLit = aiger_by_cudd[s0_asCuddIdx];
-    aiger_add_reset(aiger_lib, s0_asAigerLit, 1);
-    MASSERT(contains(processed, s0_asCuddIdx), "states must depend on the initial state");
+//    if (generate_latches)
+//    {
+//        uint s0 = aut->get_init_state_number();
+//        uint s0_asCuddIdx = s0 + NOF_SIGNALS;
+//        uint s0_asAigerLit = aiger_by_cudd.at(s0_asCuddIdx);
+//        aiger_add_reset(aiger_lib, s0_asAigerLit, 1);
+//        MASSERT(contains(processed, s0_asCuddIdx), "states must depend on the initial state");
+//    }
+    // else do nothing
 }
 
 
-uint sdf::GameSolver::walk(DdNode* a_dd, set<uint>& cuddIdxStatesUsed)  // TODO: using DdNode is bad
+uint sdf::GameSolver::walk(DdNode* a_dd, set<uint>& cuddIdxStatesUsed)
 {
     /**
     Walk given DdNode node (recursively).
@@ -950,8 +1053,7 @@ uint sdf::GameSolver::walk(DdNode* a_dd, set<uint>& cuddIdxStatesUsed)  // TODO:
     if (a_dd_cuddIdx >= inputs_outputs.size())  // this is a state variable
         cuddIdxStatesUsed.insert(a_dd_cuddIdx);
 
-    MASSERT(aiger_by_cudd.find(a_dd_cuddIdx) != aiger_by_cudd.end(), "");
-    uint a_lit = aiger_by_cudd[a_dd_cuddIdx];
+    uint a_lit = aiger_by_cudd.at(a_dd_cuddIdx);
 
     DdNode *t_bdd = Cudd_T(a_dd);
     DdNode *e_bdd = Cudd_E(a_dd);

@@ -1,7 +1,10 @@
 #pragma once
 
+#include <string>
 #include <unordered_set>
+#include <unordered_map>
 #include <spdlog/spdlog.h>
+
 
 #define BDD spotBDD
     #include <spot/tl/formula.hh>
@@ -91,7 +94,7 @@ struct SpecDescr2
  */
 bool synthesize_formula(const SpecDescr2<spot::formula>& spec_descr,
                         const std::vector<uint>& k_to_iterate,
-                        aiger*& model);
+                        std::unordered_map<std::string,std::string>& output_models);
 
 /**
  * Backwards-exploration synthesis algorithm.
@@ -99,7 +102,7 @@ bool synthesize_formula(const SpecDescr2<spot::formula>& spec_descr,
  */
 bool synthesize_atm(const SpecDescr2<spot::twa_graph_ptr>& spec_descr,
                     const std::vector<uint>& k_to_iterate,
-                    aiger*& model);
+                    std::unordered_map<std::string,std::string>& output_models);
 
 
 } //namespace sdf

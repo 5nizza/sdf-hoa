@@ -13,7 +13,7 @@ endif()
 
 message("\nBuild type: ${CMAKE_BUILD_TYPE}")
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-unknown-pragmas -pthread -fPIC")
@@ -35,6 +35,8 @@ include_directories("${THIRD_PARTIES}/cudd-3.0.0/cudd/"
                     "${THIRD_PARTIES}/cudd-3.0.0/epd/"
                     "${THIRD_PARTIES}/cudd-3.0.0/st/"
                     "${THIRD_PARTIES}/cudd-3.0.0/mtr/"
+                    "${THIRD_PARTIES}/cudd-3.0.0/dddmp"
+                    "${THIRD_PARTIES}/cudd-3.0.0/util"
                     "${THIRD_PARTIES}/cudd-3.0.0/")
 include_directories("${THIRD_PARTIES}/args-6.4.6/")
 include_directories("${THIRD_PARTIES}/pstreams-1.0.3/")

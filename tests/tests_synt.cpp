@@ -169,34 +169,6 @@ INSTANTIATE_TEST_SUITE_P(SyntWithMC,
                          ::testing::ValuesIn(specs_for_mc));
 
 
-/**
-  * Checking Synthesis from HOA: only the realisability check
-**/
-const vector<SpecParam> specs_for_hoa_synt =
-{
-    SpecParam("simple_arbiter.ehoa", true),
-    SpecParam("full_arbiter.ehoa", true),
-    SpecParam("load_balancer.ehoa", true),
-    SpecParam("mealy_moore.ehoa", true),
-    SpecParam("round_robin_arbiter.ehoa", true),
-    SpecParam("full_arbiter_unreal1.ehoa", false)
-};
-
-class HOACheckFixture : public ::testing::TestWithParam<SpecParam> { };
-
-TEST_P(HOACheckFixture, check_real_unreal)
-{
-    auto spec = GetParam();
-    auto status = run_hoa(SpecDescr(false, "./specs/hoa/" + spec.name), {4});
-    if (spec.is_real)
-        ASSERT_EQ(SYNTCOMP_RC_REAL, status);
-    else
-        ASSERT_EQ(SYNTCOMP_RC_UNKNOWN, status);
-}
-
-INSTANTIATE_TEST_SUITE_P(RealUnreal, HOACheckFixture, ::testing::ValuesIn(specs_for_hoa_synt));
-
-
 /// For future: good to check the exact values of parameter k that makes specs realizable.
 
 int main(int argc, char** argv)

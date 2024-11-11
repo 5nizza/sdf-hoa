@@ -5,6 +5,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <set>
 
 
 #define BDD spotBDD
@@ -16,13 +17,15 @@
 extern "C"
 {
     #include <aiger.h>
-    #include <mtr.h>
-    #include <cudd.h>
 }
 
+
+#include <mtr.h>  // mtr before cudd
+#include <cudd.h>
 #include <cuddObj.hh>
 #include "my_assert.hpp"
 #include "timer.hpp"
+
 
 namespace sdf
 {
@@ -38,7 +41,7 @@ public:
     GameSolver(bool is_moore_,
                const std::unordered_set<spot::formula>& inputs_,
                const std::unordered_set<spot::formula>& outputs_,
-               const spot::twa_graph_ptr& aut_,
+               const spot::twa_graph_ptr& aut_,  // NOLINT(*-pass-by-value)
                const bool do_reach_optim,
                const bool do_var_grouping_optimization,
                uint time_limit_sec_ = 3600) :
@@ -65,6 +68,10 @@ public:
      * (Beware of internal state: can be called only once!)
      */
     aiger* synthesize();
+
+    bool generate_qbf_for_relation_determinization(bool extract_model,
+                                                   std::unordered_map<std::string,std::string>& qcir_models,
+                                                   aiger*& aiger);
 
 private:
     GameSolver(const GameSolver& other);
@@ -124,7 +131,7 @@ private:
 
     uint get_optimized_and_lit(uint a_lit, uint b_lit);
 
-    void model_to_aiger();
+    void model_to_aiger(const std::set<uint>& forall_indices, const std::set<uint>& exists_indices, const std::unordered_map<uint,uint>& qcir_by_cudd);
 
     uint generate_lit()
     {
