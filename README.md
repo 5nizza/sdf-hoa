@@ -1,3 +1,13 @@
+# THIS BRANCH
+
+This branch contains the code to generate QCIR benchmarks.
+The benchmarks generated are available at
+https://github.com/5nizza/relation-determinization
+
+
+Below is the content of the original readme file for the synthesis tool `sdf`.
+
+
 # sdf-hoa
 
 The synthesis tool takes as input a TLSF or extended HOA file
