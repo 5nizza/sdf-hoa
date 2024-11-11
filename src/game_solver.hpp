@@ -16,13 +16,15 @@
 extern "C"
 {
     #include <aiger.h>
-    #include <mtr.h>
-    #include <cudd.h>
 }
 
+
+#include <mtr.h>  // mtr before cudd
+#include <cudd.h>
 #include <cuddObj.hh>
 #include "my_assert.hpp"
 #include "timer.hpp"
+
 
 namespace sdf
 {
@@ -38,7 +40,7 @@ public:
     GameSolver(bool is_moore_,
                const std::unordered_set<spot::formula>& inputs_,
                const std::unordered_set<spot::formula>& outputs_,
-               const spot::twa_graph_ptr& aut_,
+               const spot::twa_graph_ptr& aut_,  // NOLINT(*-pass-by-value)
                const bool do_reach_optim,
                uint time_limit_sec_ = 3600) :
         is_moore(is_moore_),

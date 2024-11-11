@@ -150,8 +150,16 @@ bool sdf::synthesize_atm(const SpecDescr2<spot::twa_graph_ptr>& spec_descr,
         spdlog::info("trying k = {}", k);
         auto k_aut = k_reduce(spec_descr.spec, k);
 
+        MASSERT(k_aut->is_sba() == spot::trival::yes_value, "is the automaton with Buchi-state acceptance?");
+        MASSERT(k_aut->prop_terminal() == spot::trival::yes_value, "is the automaton terminal?");
+
         spdlog::info("automaton before sim/cosim reduction: {} states, {} edges", k_aut->num_states(), k_aut->num_edges());
-        k_aut = spot::reduce_iterated_sba(k_aut);
+        auto reduced_k_aut = spot::reduce_iterated_sba(k_aut);
+        reduced_k_aut->copy_named_properties_of(k_aut);    // TODO: strange: bug?: ask Ald about this (on lilydemo13.tlsf, the properties are not copied)
+        reduced_k_aut->copy_acceptance_of(k_aut);          // TODO: strange: bug?: ask Ald about this
+        k_aut = reduced_k_aut;
+        MASSERT(k_aut->is_sba() == spot::trival::yes_value, "is the automaton with Buchi-state acceptance?");
+        MASSERT(k_aut->prop_terminal() == spot::trival::yes_value, "is the automaton terminal?");
         spdlog::info("... after sim/cosim reduction: {} states, {} edges", k_aut->num_states(), k_aut->num_edges());
 
         {   // debug

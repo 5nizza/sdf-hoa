@@ -13,10 +13,8 @@
 #include "game_solver.hpp"
 #include "utils.hpp"
 
+#include <cuddInt.h>  // useful for debugging to access the reference count
 
-extern "C" {
-    #include <cuddInt.h>  // useful for debugging to access the reference count
-}
 
 
 #define NEGATED(lit) (lit ^ 1)
@@ -50,8 +48,11 @@ vector<BDD> sdf::GameSolver::get_uncontrollable_vars_bdds()
 }
 
 
-// This function may be currently not used but useful for debugging.
-void dumpBddAsDot(Cudd& cudd, const BDD& model, const string& name)
+/**
+ * The function may be currently not used but it is useful for debugging.
+ * @param name: your name for the root node of BDD @param model
+ */
+string dumpBddAsDot(Cudd& cudd, const BDD& model, const string& name, bool use_node_names)
 {
     const char* inames[cudd.ReadSize()];
     string inames_str[cudd.ReadSize()];  // we have to store those strings for the time DumpDot is operating
@@ -62,11 +63,16 @@ void dumpBddAsDot(Cudd& cudd, const BDD& model, const string& name)
         inames[i] = inames_str[i].c_str();
     }
 
-    FILE *file = fopen((name + ".dot").c_str(), "w");
-    const char *onames[] = {name.c_str()};
+    char* buffer;
+    size_t size;
+    FILE* memstream = open_memstream(&buffer, &size);
 
-    cudd.DumpDot((vector<BDD>) {model}, inames, onames, file);
-    fclose(file);
+    const char* onames[] = {name.c_str()};
+    cudd.DumpDot((vector<BDD>) {model}, use_node_names? inames : nullptr, onames, memstream);
+    fclose(memstream);
+    auto result = string(buffer);
+    free(buffer);
+    return result;
 }
 
 
@@ -212,25 +218,6 @@ vector<BDD> sdf::GameSolver::get_substitution()
 }
 
 
-vector<string>& split(const string &s, char delim, vector<string> &elems)
-{
-    stringstream ss(s);
-    string item;
-    while (getline(ss, item, delim))
-        elems.push_back(item);
-
-    return elems;
-}
-
-
-vector<string> split(const string &s, char delim)
-{
-    vector<string> elems;
-    split(s, delim, elems);
-    return elems;
-}
-
-
 BDD sdf::GameSolver::pre_sys(BDD dst)
 {
     //TODO: add support for empty controllable (model checking)
@@ -325,21 +312,15 @@ BDD sdf::GameSolver::calc_win_region()
 
 
 /**
- * Get non-deterministic strategy from the winning region.
- * If the system outputs controllable values that satisfy this non-deterministic strategy,
- * then the system wins.
- * I.e., a non-deterministic strategy describes for each state all possible output values
- * (below is assuming W excludes error states)
+ * Get nondeterministic strategy from the winning region.
+ * A nondet strategy satisfies:
+ * ∀t∈W.∀i.∀o: (t,i,o)∈nondet <-> Succ(t,i,o)∈W & (t,i,o)⊨¬error
+ * A nondeterministic strategy is not unique, thanks to the restriction of the above property to W.
+ * We compute it as
  *
- *     strategy(t,u,c) = ∃t' W(t) & T(t,i,c,t') & W(t')
+ *     strategy(t,i,o) = ¬error(t,i,o) & W(t) & W(t)[t <- bdd_next_t(t,i,o)]
  *
- * But since t' <-> bdd(t,i,o) and since we use error=error(t,u,c) rather than error(t),
- * we get:
- *
- *     strategy(t,u,c) = ~error(t,u,c) & W(t) & W(t)[t <- bdd_next_t(t,u,c)]
- *
- * @returns: non-deterministic strategy bdd
- * @note: The strategy is non-deterministic -- determinization is done later.
+ * @returns: nondeterministic strategy bdd
  */
 BDD sdf::GameSolver::get_nondet_strategy()
 {
@@ -349,7 +330,7 @@ BDD sdf::GameSolver::get_nondet_strategy()
     // every (x,i,o) such that x in W, from x the (i,o)-transition is safe and leads to W
     // (note that win_region.VectorCompose(get_substitution()) contains exactly all (x,i,o) such that from x the (i,o)-transition leads to W)
     return win_region & ~error & win_region.VectorCompose(get_substitution());
-    // the above version seems (properly evaluate?) to yield smaller BDDs than the version below
+    // the above version seems (properly evaluate?) to yield smaller BDDs than the versions below
     // return (~error & win_region.VectorCompose(get_substitution()));
     // return (~error & win_region.VectorCompose(get_substitution())).Restrict(win_region);
 }
@@ -528,8 +509,15 @@ hmap<uint,BDD> sdf::GameSolver::extract_output_funcs()
     auto reachable = cudd.bddOne();
     if (do_reach_optim)
     {
+        auto was_reordering_disabled = not cudd.ReorderingStatus(nullptr);
+
+        cudd.AutodynEnable(CUDD_REORDER_SAME);
+
         auto T = compute_monolithic_T() & non_det_strategy & ~error;
         reachable = compute_reachable(T);
+
+        if (was_reordering_disabled)
+            cudd.AutodynDisable();
     }
 
     // the order of concretisation substantially affects the circuit size,
@@ -559,6 +547,7 @@ hmap<uint,BDD> sdf::GameSolver::extract_output_funcs()
         }
         else //no other signals left
             c_arena = non_det_strategy;
+
         // Now we have: c_arena(t,u,c) = ∃c_others: nondet(t,u,c)
         // (i.e., c_arena talks about this particular c, about t and u)
 
@@ -603,7 +592,7 @@ bool sdf::GameSolver::check_realizability()
 {
     init_cudd(cudd);
 
-    /* The CUDD variables index is as follows:
+    /* The CUDD-variables index is as follows:
      * first come inputs and outputs, ordered accordingly,
      * then come variables of automaton states
      * (thus, cuddIdx = state + NOF_SIGNALS) */
@@ -643,7 +632,7 @@ aiger* sdf::GameSolver::synthesize()
 
     // now we have win_region and compute a nondet strategy
 
-//    cudd.AutodynDisable();  // disabling re-ordering greatly helps on some examples (arbiter, load_balancer), but on others (prioritised_arbiter) it worsens things.
+    cudd.AutodynDisable();  // TODO: properly evaluate: disabling re-ordering greatly helps on some examples (arbiter, load_balancer), but on others (prioritised_arbiter) it worsens things.
 
     non_det_strategy = get_nondet_strategy();    // note: this introduces a really lot of BDD nodes
     log_time("get_nondet_strategy");
@@ -771,8 +760,7 @@ uint sdf::GameSolver::walk(DdNode* a_dd, set<uint>& cuddIdxStatesUsed)  // TODO:
     if (a_dd_cuddIdx >= inputs_outputs.size())  // this is a state variable
         cuddIdxStatesUsed.insert(a_dd_cuddIdx);
 
-    MASSERT(aiger_by_cudd.find(a_dd_cuddIdx) != aiger_by_cudd.end(), "");
-    uint a_lit = aiger_by_cudd[a_dd_cuddIdx];
+    uint a_lit = aiger_by_cudd.at(a_dd_cuddIdx);
 
     DdNode *t_bdd = Cudd_T(a_dd);
     DdNode *e_bdd = Cudd_E(a_dd);
