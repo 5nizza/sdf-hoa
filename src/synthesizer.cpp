@@ -13,6 +13,7 @@
     #include <spot/twaalgos/dot.hh>
     #include <spot/twaalgos/translate.hh>
     #include <spot/twaalgos/simulation.hh>
+    #include <spot/twaalgos/cleanacc.hh>
 //    #include <spot/parseaut/public.hh>
 #undef BDD
 
@@ -149,14 +150,27 @@ bool sdf::synthesize_atm(const SpecDescr2<spot::twa_graph_ptr>& spec_descr,
     {
         spdlog::info("trying k = {}", k);
         auto k_aut = k_reduce(spec_descr.spec, k);
+        k_aut->prop_terminal(true);
+        k_aut->prop_state_acc(true);
+        k_aut->set_buchi();
 
-        MASSERT(k_aut->is_sba() == spot::trival::yes_value, "is the automaton with Buchi-state acceptance?");
-        MASSERT(k_aut->prop_terminal() == spot::trival::yes_value, "is the automaton terminal?");
+        {   // debug
+            stringstream ss;
+            spot::print_dot(ss, k_aut);
+            spdlog::debug("\n{}", ss.str());
+        }
 
         spdlog::info("automaton before sim/cosim reduction: {} states, {} edges", k_aut->num_states(), k_aut->num_edges());
+
         auto reduced_k_aut = spot::reduce_iterated_sba(k_aut);
-        reduced_k_aut->copy_named_properties_of(k_aut);    // TODO: strange: bug?: ask Ald about this (on lilydemo13.tlsf, the properties are not copied)
-        reduced_k_aut->copy_acceptance_of(k_aut);          // TODO: strange: bug?: ask Ald about this
+        // unfortunately, to turn into original NFA type, we have (afaik) to go through these hoops
+        spot::postprocessor post;
+        post.set_type(spot::postprocessor::Buchi);
+        post.set_pref(spot::postprocessor::SBAcc);
+        post.set_level(spot::postprocessor::Low);
+        reduced_k_aut = post.run(reduced_k_aut);
+        spot::reduce_buchi_acceptance_set_here(reduced_k_aut, true);
+
         k_aut = reduced_k_aut;
         MASSERT(k_aut->is_sba() == spot::trival::yes_value, "is the automaton with Buchi-state acceptance?");
         MASSERT(k_aut->prop_terminal() == spot::trival::yes_value, "is the automaton terminal?");
@@ -170,7 +184,7 @@ bool sdf::synthesize_atm(const SpecDescr2<spot::twa_graph_ptr>& spec_descr,
 
         GameSolver solver(spec_descr.is_moore, spec_descr.inputs, spec_descr.outputs, k_aut,
                           spec_descr.do_reach_optim && (k_aut->num_states()<=R_OPTIM_BOUND),
-                          3600);
+                          1800);
         if (spec_descr.extract_model)
         {
             model = solver.synthesize();

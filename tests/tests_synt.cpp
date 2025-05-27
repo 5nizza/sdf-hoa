@@ -27,6 +27,11 @@ struct SpecParam
     SpecParam(string name_, bool is_real_) : name(move(name_)), is_real(is_real_) { }
 };
 
+// with this function, in console, we get readable string for GetParam()
+void PrintTo(const SpecParam& val, std::ostream* os) {
+    *os << "{path: " << val.name << ", is_real: " << val.is_real << "}";
+}
+
 
 /**
   * Checking realisability (without model extraction)

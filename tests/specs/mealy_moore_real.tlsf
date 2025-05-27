@@ -1,7 +1,7 @@
 INFO {
   TITLE:       "Simple Arbiter"
   DESCRIPTION: "Unreal by Moore machines, but is real by Mealy machines"
-  SEMANTICS:   Moore
+  SEMANTICS:   Mealy
   TARGET:      Mealy
 }
 
